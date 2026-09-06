@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - qt-001-repository-ci-foundation
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.9'
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src tests
+      - run: uv run pytest
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    needs: [frontend, api]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start local stack
+        run: docker compose up --build --wait
+      - name: Verify API health
+        run: test "$(curl --fail --silent http://localhost:8000/health)" = '{"status":"ok","service":"quotepilot-api"}'
+      - name: Verify web shell
+        run: curl --fail --silent http://localhost:5173 | grep -q '<title>QuotePilot</title>'
+      - name: Stop local stack
+        if: always()
+        run: docker compose down -v
