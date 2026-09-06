@@ -1,0 +1,44 @@
+name: Bootstrap dependency locks
+
+on:
+  push:
+    branches:
+      - qt-001-repository-ci-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package.json
+
+      - name: Generate npm lockfile
+        working-directory: apps/web
+        run: npm install --package-lock-only --ignore-scripts
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.9'
+          enable-cache: true
+
+      - name: Generate uv lockfile
+        working-directory: apps/api
+        run: uv lock
+
+      - name: Commit generated lockfiles and retire bootstrap workflow
+        run: |
+          rm .github/workflows/bootstrap-locks.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json apps/api/uv.lock .github/workflows/bootstrap-locks.yml
+          git commit -m "chore: lock QT-001 dependencies"
+          git push
