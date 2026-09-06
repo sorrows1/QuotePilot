@@ -16,7 +16,7 @@ For containerized development, install Docker Desktop (or another Docker Compose
 
 For native development and checks, install:
 
-- Node.js 22 or newer and npm 10 or newer.
+- Node.js 22.13 or newer and npm 10 or newer.
 - Python 3.12 or 3.13.
 - `uv` 0.12.x.
 
