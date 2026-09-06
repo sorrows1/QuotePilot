@@ -28,6 +28,24 @@ jobs:
           version: '0.12.9'
           enable-cache: true
           cache-dependency-glob: apps/server/uv.lock
+      - name: Verify development launcher setup guidance
+        run: |
+          set +e
+          output="$(node scripts/dev.mjs 2>&1)"
+          status=$?
+          set -e
+          test "$status" -ne 0
+          printf '%s\n' "$output" | grep -F 'npm run setup'
+      - name: Validate Docker secret exclusions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          for path in [Path('apps/web/.dockerignore'), Path('apps/server/.dockerignore')]:
+              patterns = {line.strip() for line in path.read_text().splitlines() if line.strip()}
+              assert '.env' in patterns, f'{path}: missing .env exclusion'
+              assert '.env.*' in patterns, f'{path}: missing .env.* exclusion'
+          PY
       - run: npm run setup:ci
       - run: npm run check
       - name: Validate root development launcher syntax
