@@ -6,6 +6,7 @@
   },
   "scripts": {
     "setup": "npm --prefix apps/web ci && uv --directory apps/server sync",
+    "setup:ci": "npm --prefix apps/web ci && uv --directory apps/server sync --locked",
     "dev": "node scripts/dev.mjs",
     "lint": "npm --prefix apps/web run lint && uv --directory apps/server run ruff check . && uv --directory apps/server run ruff format --check .",
     "typecheck": "npm --prefix apps/web run typecheck && uv --directory apps/server run mypy src tests",
