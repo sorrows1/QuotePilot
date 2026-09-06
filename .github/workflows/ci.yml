@@ -28,12 +28,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Validate root development launcher syntax
+        working-directory: .
+        run: node --check scripts/dev.mjs
 
-  api:
+  server:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,8 +46,8 @@ jobs:
         with:
           version: '0.12.9'
           enable-cache: true
-          cache-dependency-glob: apps/api/uv.lock
-      - run: uv sync --frozen
+          cache-dependency-glob: apps/server/uv.lock
+      - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src tests
@@ -98,7 +101,7 @@ jobs:
 
   compose-smoke:
     runs-on: ubuntu-latest
-    needs: [frontend, api, codex-config]
+    needs: [frontend, server, codex-config]
     steps:
       - uses: actions/checkout@v4
       - name: Build and start local stack

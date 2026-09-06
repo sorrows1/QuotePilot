@@ -13,7 +13,7 @@ This file is the canonical, vendor-neutral implementation-worker policy for this
 ## Architecture boundaries
 
 - `apps/web` owns presentation and browser interaction. React components must not become the authoritative home of pricing, authorization, workflow, or other business invariants.
-- `apps/api` owns HTTP boundaries and backend application behavior. Keep transport handlers thin as domain behavior grows.
+- `apps/server` owns HTTP boundaries and backend application behavior. Keep transport handlers thin as domain behavior grows.
 - PostgreSQL is the authoritative operational datastore for persistent business truth. Derived indexes or caches must not become an independent source of truth.
 - Introduce shared packages or interfaces only for a demonstrated current boundary. External/replaceable dependencies may use ports when substitution or volatility is real; do not create interfaces for every class.
 - Validate and type external, model, tool, and HTTP inputs at trust boundaries.
@@ -35,8 +35,8 @@ This file is the canonical, vendor-neutral implementation-worker policy for this
 
 ## Verification
 
-- Frontend: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` from `apps/web`.
-- API: `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy src tests`, `uv run pytest` from `apps/api`.
+- Run `npm run check` from the repository root for the complete local frontend/server quality gate.
+- Frontend focused checks live under `apps/web`; server focused checks live under `apps/server`.
 - Run focused checks during implementation and the complete affected quality gate before handoff.
 - Test observable behavior and invariants rather than private implementation details. Bugs should receive regression coverage where practical.
 - Auth, tenant isolation, concurrency, migrations, commercial calculations, and data-integrity behavior require dedicated tests when affected.

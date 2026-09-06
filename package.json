@@ -1,0 +1,16 @@
+{
+  "name": "quotepilot",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "setup": "npm --prefix apps/web ci && uv --directory apps/server sync",
+    "dev": "node scripts/dev.mjs",
+    "lint": "npm --prefix apps/web run lint && uv --directory apps/server run ruff check . && uv --directory apps/server run ruff format --check .",
+    "typecheck": "npm --prefix apps/web run typecheck && uv --directory apps/server run mypy src tests",
+    "test": "npm --prefix apps/web test && uv --directory apps/server run pytest",
+    "build": "npm --prefix apps/web run build",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+  }
+}
