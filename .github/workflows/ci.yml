@@ -50,9 +50,55 @@ jobs:
       - run: uv run mypy src tests
       - run: uv run pytest
 
+  codex-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate project Codex configuration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import tomllib
+
+          config_path = Path('.codex/config.toml')
+          with config_path.open('rb') as handle:
+              config = tomllib.load(handle)
+
+          agents_config = config.get('agents')
+          assert isinstance(agents_config, dict), '[agents] table is required'
+          assert agents_config.get('enabled') is True, 'project agents must be enabled'
+          max_threads = agents_config.get('max_concurrent_threads_per_session')
+          assert isinstance(max_threads, int) and max_threads >= 1, 'max concurrent threads must be a positive integer'
+
+          required_fields = {'name', 'description', 'developer_instructions'}
+          expected_agents = {
+              'explorer': Path('.codex/agents/explorer.toml'),
+              'reviewer': Path('.codex/agents/reviewer.toml'),
+          }
+
+          for expected_name, path in expected_agents.items():
+              with path.open('rb') as handle:
+                  agent = tomllib.load(handle)
+              missing = required_fields - agent.keys()
+              assert not missing, f'{path}: missing required fields {sorted(missing)}'
+              for field in required_fields:
+                  assert isinstance(agent[field], str) and agent[field].strip(), f'{path}: {field} must be non-empty'
+              assert agent['name'] == expected_name, f'{path}: name must match its configured role'
+              assert agent.get('sandbox_mode') == 'read-only', f'{path}: helper role must be read-only'
+
+          for path in sorted(Path('.codex/agents').glob('*.toml')):
+              with path.open('rb') as handle:
+                  tomllib.load(handle)
+
+          print('Codex project configuration is valid TOML with required read-only helper roles.')
+          PY
+
   compose-smoke:
     runs-on: ubuntu-latest
-    needs: [frontend, api]
+    needs: [frontend, api, codex-config]
     steps:
       - uses: actions/checkout@v4
       - name: Build and start local stack
