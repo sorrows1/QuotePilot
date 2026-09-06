@@ -18,12 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: apps/web/package.json
 
       - name: Generate npm lockfile
         working-directory: apps/web
-        run: npm install --package-lock-only --ignore-scripts
+        run: npm install --package-lock-only --ignore-scripts --legacy-peer-deps
 
       - uses: astral-sh/setup-uv@v6
         with:
