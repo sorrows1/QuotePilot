@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import process from 'node:process'
+import { databaseEnvironment } from './database-env.mjs'
 
 const missing = [
   ['apps/web/node_modules', 'frontend dependencies'],
@@ -33,10 +34,17 @@ try {
 }
 
 const children = []
+let serverEnvironment
+try {
+  serverEnvironment = databaseEnvironment()
+} catch (error) {
+  console.error(error.message)
+  process.exit(1)
+}
 let shuttingDown = false
 
-function start(name, command, args) {
-  const child = spawn(command, args, { stdio: 'inherit', env: process.env })
+function start(name, command, args, env = process.env) {
+  const child = spawn(command, args, { stdio: 'inherit', env })
   children.push(child)
   child.once('error', (error) => {
     if (shuttingDown) return
@@ -105,7 +113,7 @@ start('FastAPI server', uvCommand, [
   '0.0.0.0',
   '--port',
   '8000',
-])
+], serverEnvironment)
 start('Vite web app', process.execPath, [
   'apps/web/node_modules/vite/bin/vite.js',
   'apps/web',

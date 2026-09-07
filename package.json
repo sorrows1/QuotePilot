@@ -5,14 +5,15 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "setup": "npm run setup:db && npm run setup:deps",
+    "setup": "npm run setup:db && npm run setup:deps && npm run db:migrate",
+    "db:migrate": "node scripts/server.mjs python -m quotepilot_api.migrate",
     "setup:deps": "npm --prefix apps/web ci && uv --directory apps/server sync",
     "setup:db": "node scripts/setup-db.mjs",
     "setup:ci": "npm --prefix apps/web ci && uv --directory apps/server sync --locked",
     "dev": "node scripts/dev.mjs",
     "lint": "npm --prefix apps/web run lint && uv --directory apps/server run ruff check . && uv --directory apps/server run ruff format --check .",
     "typecheck": "npm --prefix apps/web run typecheck && uv --directory apps/server run mypy src tests",
-    "test": "npm --prefix apps/web test && uv --directory apps/server run pytest",
+    "test": "npm --prefix apps/web test && node --test scripts/database-env.test.mjs && node scripts/server.mjs pytest",
     "build": "npm --prefix apps/web run build",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   }

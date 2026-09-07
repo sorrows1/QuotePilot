@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:17-alpine
-    environment:
+    environment: &database-credentials
       POSTGRES_USER: ${POSTGRES_USER:-quotepilot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quotepilot_dev}
       POSTGRES_DB: ${POSTGRES_DB:-quotepilot_dev}
@@ -19,7 +19,9 @@ services:
     build:
       context: ./apps/server
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-quotepilot}:${POSTGRES_PASSWORD:-quotepilot_dev}@db:5432/${POSTGRES_DB:-quotepilot_dev}
+      <<: *database-credentials
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_HOST: db
     depends_on:
       db:
         condition: service_healthy

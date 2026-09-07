@@ -89,11 +89,33 @@ jobs:
       - name: Validate native Vite app root on Linux
         run: |
           node -e "const { spawn } = require('node:child_process'); const child = spawn(process.execPath, ['apps/web/node_modules/vite/bin/vite.js', 'apps/web', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], { stdio: 'inherit' }); const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); (async () => { try { let body = ''; for (let attempt = 0; attempt < 30; attempt += 1) { try { const response = await fetch('http://127.0.0.1:5173'); if (response.ok) { body = await response.text(); break; } } catch {} await sleep(500); } if (!body.includes('<title>QuotePilot</title>')) throw new Error('Vite did not serve QuotePilot from apps/web'); } finally { if (child.exitCode === null) child.kill(); } })().catch((error) => { console.error(error); process.exitCode = 1; })"
+      - name: Provision database and migrate for deterministic PostgreSQL tests
+        run: |
+          npm run setup:db
+          npm run db:migrate
       - run: npm run check
+      - name: Verify overridden native database configuration
+        env:
+          COMPOSE_PROJECT_NAME: qt002-custom
+          POSTGRES_USER: qt002_custom
+          POSTGRES_PASSWORD: qt002_custom_password
+          POSTGRES_DB: qt002_custom
+          POSTGRES_PORT: '5544'
+        run: |
+          npm run setup:db
+          npm run db:migrate
+          node scripts/server.mjs pytest
+      - name: Stop disposable quality databases
+        if: always()
+        run: |
+          docker compose down -v
+          docker compose -p qt002-custom down -v
       - name: Validate root development scripts syntax
         run: |
           node --check scripts/dev.mjs
           node --check scripts/setup-db.mjs
+          node --check scripts/database-env.mjs
+          node --check scripts/server.mjs
 
   windows-dev-launcher:
     runs-on: windows-latest
@@ -180,6 +202,8 @@ jobs:
           npm run setup:db
       - name: Build and start local stack
         run: docker compose up --build --wait
+      - name: Verify packaged migration runner
+        run: docker compose exec -T api python -m quotepilot_api.migrate
       - name: Verify API health
         run: test "$(curl --fail --silent http://localhost:8000/health)" = '{"status":"ok","service":"quotepilot-api"}'
       - name: Verify web shell
