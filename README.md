@@ -29,17 +29,27 @@ npm run setup
 
 This command performs setup in fail-fast order:
 
-- first runs `docker compose up -d --wait db`, which creates the PostgreSQL container and persistent volume when missing, starts or reconciles the existing service when already present, and waits for its configured health check to pass;
-- then installs the frontend from `apps/web/package-lock.json`;
-- then synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock` using normal `uv sync`.
+- first runs the cross-platform database setup script, which uses Docker Compose to create the PostgreSQL container and persistent volume when missing or start/reconcile the service when already present;
+- waits for PostgreSQL's container health check;
+- performs an authenticated TCP `psql` transaction using the configured `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`, including a temporary write/read check that is rolled back;
+- only after database validation succeeds, installs the frontend from `apps/web/package-lock.json` and synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock`.
 
-Checking PostgreSQL first means setup fails before dependency installation if Docker is unavailable or the development database cannot become healthy. The PostgreSQL service is left running after setup so `npm run dev` can reuse it. CI uses `uv sync --locked` for dependency setup so a stale lockfile fails instead of being rewritten.
+This makes setup fail before dependency installation if Docker is unavailable, PostgreSQL cannot become healthy, the configured database/user/password do not work, or SQL read/write validation fails. The PostgreSQL service is left running so `npm run dev` can reuse it. CI uses `uv sync --locked` for dependency setup so a stale lockfile fails instead of being rewritten.
 
 The database step can also be run independently:
 
 ```bash
 npm run setup:db
 ```
+
+PostgreSQL initialization variables only define the database/user/password when the persistent data directory is first created. Changing `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_DB` later does not rewrite an existing database volume. `npm run setup:db` detects that mismatch because its authenticated SQL check fails instead of reporting success. If the local database is disposable and you intentionally want to recreate it with new values, run:
+
+```bash
+docker compose down -v
+npm run setup:db
+```
+
+`docker compose down -v` deletes the local PostgreSQL volume and its data, so do not use it when you need to preserve that database.
 
 ## Daily local development
 
@@ -103,7 +113,7 @@ npm test
 npm run build
 ```
 
-CI installs from the committed lockfiles, runs the same meaningful frontend/server checks, validates the native Vite launcher path, validates the committed Codex project configuration, verifies PostgreSQL provisioning, and smoke-tests the full Docker Compose stack from a clean checkout.
+CI installs from the committed lockfiles, runs the same meaningful frontend/server checks, validates the native Vite launcher path, validates the committed Codex project configuration, verifies authenticated PostgreSQL provisioning including rejection of stale credential configuration, and smoke-tests the full Docker Compose stack from a clean checkout.
 
 ## Configuration
 
