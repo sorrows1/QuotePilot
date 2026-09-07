@@ -13,6 +13,8 @@ permissions:
 jobs:
   lock-refresh:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,8 +25,17 @@ jobs:
           version: '0.12.9'
       - name: Regenerate server lockfile
         run: uv --directory apps/server lock
-      - name: Emit generated lockfile
-        run: python -c "import base64, pathlib; print('LOCK_B64=' + base64.b64encode(pathlib.Path('apps/server/uv.lock').read_bytes()).decode())"
+      - name: Commit generated lockfile
+        run: |
+          if git diff --quiet -- apps/server/uv.lock; then
+            echo 'Server lockfile is already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/server/uv.lock
+          git commit -m 'chore: refresh server lockfile'
+          git push origin HEAD:qt-001-repository-ci-foundation
 
   quality:
     runs-on: ubuntu-latest
