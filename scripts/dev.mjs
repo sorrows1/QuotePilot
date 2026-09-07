@@ -13,7 +13,6 @@ if (missing.length > 0) {
   process.exit(1)
 }
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const uvCommand = process.platform === 'win32' ? 'uv.exe' : 'uv'
 const dockerCommand = process.platform === 'win32' ? 'docker.exe' : 'docker'
 
@@ -107,7 +106,11 @@ start('FastAPI server', uvCommand, [
   '--port',
   '8000',
 ])
-start('Vite web app', npmCommand, ['--prefix', 'apps/web', 'run', 'dev'])
+start('Vite web app', process.execPath, [
+  'apps/web/node_modules/vite/bin/vite.js',
+  '--host',
+  '0.0.0.0',
+])
 
 console.error('QuotePilot development environment is running:')
 console.error('  Web: http://localhost:5173')
