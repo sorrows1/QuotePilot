@@ -11,6 +11,21 @@ permissions:
   contents: read
 
 jobs:
+  lock-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.9'
+      - name: Regenerate server lockfile
+        run: uv --directory apps/server lock
+      - name: Emit generated lockfile
+        run: python -c "import base64, pathlib; print('LOCK_B64=' + base64.b64encode(pathlib.Path('apps/server/uv.lock').read_bytes()).decode())"
+
   quality:
     runs-on: ubuntu-latest
     steps:
