@@ -108,6 +108,7 @@ start('FastAPI server', uvCommand, [
 ])
 start('Vite web app', process.execPath, [
   'apps/web/node_modules/vite/bin/vite.js',
+  'apps/web',
   '--host',
   '0.0.0.0',
 ])
