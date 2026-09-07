@@ -1,0 +1,4 @@
+# Project-scoped Codex adapter. Keep architecture and engineering policy in AGENTS.md.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 2

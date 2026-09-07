@@ -1,0 +1,42 @@
+[project]
+name = "quotepilot-api"
+version = "0.1.0"
+description = "QuotePilot FastAPI service"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.116,<1.0",
+  "pydantic>=2.11,<3.0",
+  "uvicorn[standard]>=0.35,<1.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx2>=2.12,<3.0",
+  "mypy>=1.17,<2.0",
+  "pytest>=8.4,<10.0",
+  "ruff>=0.16,<1.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quotepilot_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
