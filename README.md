@@ -27,13 +27,13 @@ From the repository root:
 npm run setup
 ```
 
-This command:
+This command performs setup in fail-fast order:
 
-- installs the frontend from `apps/web/package-lock.json`;
-- synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock` using normal `uv sync`;
-- idempotently runs `docker compose up -d --wait db`, which creates the PostgreSQL container and persistent volume when missing, starts or reconciles the existing service when already present, and waits for its configured health check to pass.
+- first runs `docker compose up -d --wait db`, which creates the PostgreSQL container and persistent volume when missing, starts or reconciles the existing service when already present, and waits for its configured health check to pass;
+- then installs the frontend from `apps/web/package-lock.json`;
+- then synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock` using normal `uv sync`.
 
-The PostgreSQL service is left running after setup so `npm run dev` can reuse it. CI uses `uv sync --locked` for dependency setup so a stale lockfile fails instead of being rewritten.
+Checking PostgreSQL first means setup fails before dependency installation if Docker is unavailable or the development database cannot become healthy. The PostgreSQL service is left running after setup so `npm run dev` can reuse it. CI uses `uv sync --locked` for dependency setup so a stale lockfile fails instead of being rewritten.
 
 The database step can also be run independently:
 
@@ -94,7 +94,7 @@ Run the complete local quality gate from the repository root:
 npm run check
 ```
 
-The root command delegates to the existing frontend and server checks. The server pytest suite includes an in-process test of `/health`; CI separately exercises the live `/health` endpoint through the fully containerized stack. Focused commands are also available:
+The root command delegates to the existing frontend and server checks. The server pytest suite includes an in-process test of `/health`; Starlette's supported `httpx2` test-client dependency is locked for that test path. CI separately exercises the live `/health` endpoint through the fully containerized stack. Focused commands are also available:
 
 ```bash
 npm run lint
