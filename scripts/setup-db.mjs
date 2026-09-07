@@ -43,7 +43,7 @@ const validationCommand = [
   'psql',
   '--no-psqlrc',
   '-h',
-  '127.0.0.1',
+  'db',
   '-U',
   '"$POSTGRES_USER"',
   '-d',
