@@ -5,7 +5,7 @@ from quotepilot_api.main import app
 client = TestClient(app)
 
 
-def test_health_returns_stable_ready_response() -> None:
+def test_health_returns_stable_liveness_response() -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
