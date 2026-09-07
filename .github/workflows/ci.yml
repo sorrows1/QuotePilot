@@ -120,6 +120,10 @@ jobs:
     needs: [quality, windows-dev-launcher, codex-config]
     steps:
       - uses: actions/checkout@v4
+      - name: Provision development database through root setup command
+        run: npm run setup:db
+      - name: Verify provisioned PostgreSQL readiness
+        run: docker compose exec -T db sh -lc 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
       - name: Build and start local stack
         run: docker compose up --build --wait
       - name: Verify API health
