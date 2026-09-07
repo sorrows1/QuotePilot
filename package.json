@@ -5,7 +5,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "setup": "npm --prefix apps/web ci && uv --directory apps/server sync",
+    "setup": "npm run setup:deps && npm run setup:db",
+    "setup:deps": "npm --prefix apps/web ci && uv --directory apps/server sync",
+    "setup:db": "docker compose up -d --wait db",
     "setup:ci": "npm --prefix apps/web ci && uv --directory apps/server sync --locked",
     "dev": "node scripts/dev.mjs",
     "lint": "npm --prefix apps/web run lint && uv --directory apps/server run ruff check . && uv --directory apps/server run ruff format --check .",
