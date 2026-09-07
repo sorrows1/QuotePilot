@@ -47,6 +47,9 @@ jobs:
               assert '.env.*' in patterns, f'{path}: missing .env.* exclusion'
           PY
       - run: npm run setup:ci
+      - name: Validate native Vite app root on Linux
+        run: |
+          node -e "const { spawn } = require('node:child_process'); const child = spawn(process.execPath, ['apps/web/node_modules/vite/bin/vite.js', 'apps/web', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], { stdio: 'inherit' }); const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); (async () => { try { let body = ''; for (let attempt = 0; attempt < 30; attempt += 1) { try { const response = await fetch('http://127.0.0.1:5173'); if (response.ok) { body = await response.text(); break; } } catch {} await sleep(500); } if (!body.includes('<title>QuotePilot</title>')) throw new Error('Vite did not serve QuotePilot from apps/web'); } finally { if (child.exitCode === null) child.kill(); } })().catch((error) => { console.error(error); process.exitCode = 1; })"
       - run: npm run check
       - name: Validate root development launcher syntax
         run: node --check scripts/dev.mjs
@@ -61,10 +64,10 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm --prefix apps/web ci
-      - name: Validate Vite child process path on Windows
+      - name: Validate native Vite app root on Windows
         run: |
           node --check scripts/dev.mjs
-          node -e "const { spawnSync } = require('node:child_process'); const result = spawnSync(process.execPath, ['apps/web/node_modules/vite/bin/vite.js', '--version'], { stdio: 'inherit' }); process.exit(result.status ?? 1)"
+          node -e "const { spawn } = require('node:child_process'); const child = spawn(process.execPath, ['apps/web/node_modules/vite/bin/vite.js', 'apps/web', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], { stdio: 'inherit' }); const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); (async () => { try { let body = ''; for (let attempt = 0; attempt < 30; attempt += 1) { try { const response = await fetch('http://127.0.0.1:5173'); if (response.ok) { body = await response.text(); break; } } catch {} await sleep(500); } if (!body.includes('<title>QuotePilot</title>')) throw new Error('Vite did not serve QuotePilot from apps/web'); } finally { if (child.exitCode === null) child.kill(); } })().catch((error) => { console.error(error); process.exitCode = 1; })"
 
   codex-config:
     runs-on: ubuntu-latest
