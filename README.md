@@ -17,7 +17,7 @@ Install:
 - Node.js 22.13 or newer and npm 10 or newer.
 - Python 3.12 or 3.13.
 - `uv` 0.12.x.
-- Docker Desktop or another Docker Compose-compatible engine.
+- Docker Desktop or another Docker Compose-compatible engine, with the Docker engine running before setup.
 
 ## Initial setup
 
@@ -27,7 +27,19 @@ From the repository root:
 npm run setup
 ```
 
-This installs the frontend from `apps/web/package-lock.json` and synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock`. Developer setup uses normal `uv sync`; CI uses `uv sync --locked` so a stale lockfile fails instead of being rewritten.
+This command:
+
+- installs the frontend from `apps/web/package-lock.json`;
+- synchronizes the Python environment in `apps/server` from `pyproject.toml`/`uv.lock` using normal `uv sync`;
+- idempotently runs `docker compose up -d --wait db`, which creates the PostgreSQL container and persistent volume when missing, starts or reconciles the existing service when already present, and waits for its configured health check to pass.
+
+The PostgreSQL service is left running after setup so `npm run dev` can reuse it. CI uses `uv sync --locked` for dependency setup so a stale lockfile fails instead of being rewritten.
+
+The database step can also be run independently:
+
+```bash
+npm run setup:db
+```
 
 ## Daily local development
 
@@ -38,7 +50,7 @@ npm run dev
 The launcher:
 
 - checks that `apps/web/node_modules` and `apps/server/.venv` already exist and tells you to run `npm run setup` if either is missing;
-- starts the PostgreSQL service with Docker Compose and waits for it to become healthy;
+- starts/reconciles the PostgreSQL service with Docker Compose and waits for it to become healthy;
 - starts FastAPI/Uvicorn with reload on the host at http://localhost:8000;
 - starts Vite with hot reload on the host at http://localhost:5173;
 - stops the web/server processes on Ctrl+C while leaving the PostgreSQL container running for the next development session.
@@ -64,6 +76,8 @@ Then open:
 - Web: http://localhost:5173
 - API health: http://localhost:8000/health
 
+`/health` is the API liveness endpoint. It currently proves that the FastAPI application is running and returns its stable health payload; it does not query PostgreSQL. Database-aware readiness belongs in a later persistence task once the server has a real database connection layer.
+
 The Compose PostgreSQL credentials are development-only defaults. Override `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and `POSTGRES_PORT` in your local environment when needed; never reuse these values outside local development.
 
 Stop the stack with:
@@ -80,7 +94,7 @@ Run the complete local quality gate from the repository root:
 npm run check
 ```
 
-The root command delegates to the existing frontend and server checks. Focused commands are also available:
+The root command delegates to the existing frontend and server checks. The server pytest suite includes an in-process test of `/health`; CI separately exercises the live `/health` endpoint through the fully containerized stack. Focused commands are also available:
 
 ```bash
 npm run lint
@@ -89,7 +103,7 @@ npm test
 npm run build
 ```
 
-CI installs from the committed lockfiles, runs the same meaningful frontend/server checks, validates the committed Codex project configuration, and smoke-tests the full Docker Compose stack from a clean checkout.
+CI installs from the committed lockfiles, runs the same meaningful frontend/server checks, validates the native Vite launcher path, validates the committed Codex project configuration, verifies PostgreSQL provisioning, and smoke-tests the full Docker Compose stack from a clean checkout.
 
 ## Configuration
 
