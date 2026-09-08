@@ -51,7 +51,7 @@ def test_concurrent_runners_wait_for_lock_and_reach_head(empty_database: Engine)
         with empty_database.connect() as connection:
             assert (
                 connection.scalar(text("SELECT version_num FROM alembic_version"))
-                == "0001_tenant_baseline"
+                == "0002_commercial"
             )
     finally:
         for child in children:
