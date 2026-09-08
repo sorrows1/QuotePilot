@@ -1,6 +1,7 @@
 from alembic import context
 from sqlalchemy import Connection
 
+from quotepilot_api import auth_models  # noqa: F401
 from quotepilot_api.tenants import Base
 
 connection = context.config.attributes.get("connection")

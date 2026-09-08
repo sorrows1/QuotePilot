@@ -113,7 +113,8 @@ start('FastAPI server', uvCommand, [
   '0.0.0.0',
   '--port',
   '8000',
-], serverEnvironment)
+  '--no-proxy-headers',
+], { ...serverEnvironment, AUTH_ORIGIN: serverEnvironment.AUTH_ORIGIN || 'http://localhost:5173', AUTH_LOCAL_HTTP: serverEnvironment.AUTH_LOCAL_HTTP || '1' })
 start('Vite web app', process.execPath, [
   'apps/web/node_modules/vite/bin/vite.js',
   'apps/web',

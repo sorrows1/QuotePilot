@@ -74,7 +74,16 @@ def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
     for _ in range(2):
         migrate(empty_database)
         inspector = inspect(empty_database)
-        assert set(inspector.get_table_names()) == {"alembic_version", "tenants", "tenant_settings"}
+        assert set(inspector.get_table_names()) == {
+            "alembic_version",
+            "tenants",
+            "tenant_settings",
+            "tenant_logins",
+            "users",
+            "auth_sessions",
+            "business_audit_events",
+            "auth_limits",
+        }
         assert inspector.get_pk_constraint("tenants")["constrained_columns"] == ["id"]
         assert inspector.get_pk_constraint("tenant_settings")["constrained_columns"] == [
             "tenant_id"

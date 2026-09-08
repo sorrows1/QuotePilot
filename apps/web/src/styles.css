@@ -83,3 +83,14 @@ h1 {
   background: #228b58;
   box-shadow: 0 0 0 4px rgb(34 139 88 / 12%);
 }
+
+fieldset { border: 0; padding: 0; margin: 24px 0; display: grid; gap: 16px; }
+label { display: grid; gap: 6px; font-weight: 600; }
+input, select { width: 100%; min-height: 44px; padding: 10px; border: 1px solid #8793a3; border-radius: 6px; }
+button { min-height: 44px; padding: 10px 16px; border: 1px solid #233d63; border-radius: 6px; background: #233d63; color: white; cursor: pointer; }
+button:disabled { opacity: .6; cursor: wait; }
+:focus-visible { outline: 3px solid #287acc; outline-offset: 3px; }
+.error { color: #a01e2c; background: #fff0f0; padding: 12px; }
+.users { padding: 0; list-style: none; }
+.users li { padding: 16px 0; border-top: 1px solid #d9dee5; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }

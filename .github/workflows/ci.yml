@@ -94,6 +94,10 @@ jobs:
           npm run setup:db
           npm run db:migrate
       - run: npm run check
+      - name: Install Chromium and run real auth browser gate
+        run: |
+          node apps/web/node_modules/@playwright/test/cli.js install --with-deps chromium
+          npm run test:e2e
       - name: Verify overridden native database configuration
         env:
           COMPOSE_PROJECT_NAME: qt002-custom

@@ -7,6 +7,6 @@ describe('App', () => {
     const markup = renderToStaticMarkup(<App />)
 
     expect(markup).toContain('QuotePilot')
-    expect(markup).toContain('Foundation ready')
+    expect(markup).toContain('Restoring session')
   })
 })

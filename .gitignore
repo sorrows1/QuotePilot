@@ -32,3 +32,6 @@ Thumbs.db
 .codex/logs/
 .codex/sessions/
 .codex/tmp/
+
+test-results/
+playwright-report/
