@@ -84,6 +84,7 @@ def seed(engine: Engine) -> tuple[TenantContext, ProductInput, PricebookInput, C
         "1.0000000",
         "1e18",
         "1e999999",
+        "0e999999",
         "bad",
     ],
 )
@@ -646,3 +647,60 @@ def test_registered_schema_matches_migration(database: Engine) -> None:
 
     with database.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+
+
+@pytest.mark.parametrize("isolation", ["REPEATABLE READ", "SERIALIZABLE"])
+def test_stale_snapshot_writer_aborts(database: Engine, isolation: str) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    ctx, p, b, c = seed(database)
+    barrier = Barrier(2)
+
+    def insert() -> str:
+        try:
+            with Session(database) as session, session.begin():
+                session.execute(text("SET TRANSACTION ISOLATION LEVEL " + isolation))
+                session.execute(
+                    select(s.product_costs).where(s.product_costs.c.tenant_id == ctx.tenant_id)
+                )
+                barrier.wait(timeout=10)
+                CommercialRepository(session).add(
+                    ctx,
+                    CostInput(
+                        product_id=p.id,
+                        uom="EA",
+                        unit_cost=Decimal("1"),
+                        valid_from=START,
+                        source="concurrent-snapshot",
+                    ),
+                )
+            return "committed"
+        except OperationalError as error:
+            assert getattr(error.orig, "sqlstate", None) == "40001"
+            return "serialization_failure"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(insert) for _ in range(2)]
+        assert sorted(f.result(timeout=20) for f in futures) == [
+            "committed",
+            "serialization_failure",
+        ]
+
+
+def test_maximum_exact_authority_roundtrips(database: Engine) -> None:
+    ctx, p, b, c = seed(database)
+    record = price(p.id, b.id, unit_price="999999999999999999.999999")
+    CommercialService(sessionmaker(database)).create_batch(ctx, [record])
+    with CommercialService(sessionmaker(database)).snapshot(ctx) as r:
+        assert (
+            r.price(ctx, p.id, b.id, "EA", Decimal("1"), START)["unit_price"] == record.unit_price
+        )
+
+
+def test_constructed_input_is_revalidated_before_storage(database: Engine) -> None:
+    ctx, p, b, c = seed(database)
+    record = price(p.id, b.id).model_copy(update={"unit_price": 1.1})
+    with pytest.raises(ValueError):
+        CommercialService(sessionmaker(database)).create_batch(ctx, [record])
+    with CommercialService(sessionmaker(database)).snapshot(ctx) as r:
+        assert r.get(ctx, "prices", record.id) is None

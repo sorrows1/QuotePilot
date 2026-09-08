@@ -18,7 +18,7 @@ def exact(value: object) -> Decimal:
     except InvalidOperation:
         raise ValueError("Invalid decimal") from None
     exponent = result.as_tuple().exponent
-    if not result.is_finite() or not isinstance(exponent, int) or exponent < -6:
+    if not result.is_finite() or not isinstance(exponent, int) or exponent < -6 or exponent > 18:
         raise ValueError("Finite decimal with scale at most six required")
     if result.copy_abs() >= Decimal("1e18"):
         raise ValueError("Decimal exceeds storage range")
