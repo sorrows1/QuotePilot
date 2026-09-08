@@ -436,6 +436,19 @@ class AuthService:
         user = AuthRepository(session).user(principal.context, user_id)
         if user.version != version:
             raise AuthError("USER_VERSION_CONFLICT", 409)
+        if disabled is True and not user.disabled and user.role == Role.SYSTEM_ADMIN:
+            other_admin = session.scalar(
+                select(User.id)
+                .where(
+                    User.tenant_id == principal.context.tenant_id,
+                    User.role == Role.SYSTEM_ADMIN,
+                    User.disabled.is_(False),
+                    User.id != user.id,
+                )
+                .limit(1)
+            )
+            if other_admin is None:
+                raise AuthError("LAST_ADMIN_REQUIRED", 409)
         if disabled is not None:
             user.disabled = disabled
         if disabled or revoke:

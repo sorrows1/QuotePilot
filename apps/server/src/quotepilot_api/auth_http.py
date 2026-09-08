@@ -12,6 +12,7 @@ from quotepilot_api.auth import AuthError
 from quotepilot_api.auth_api import auth_config
 
 MESSAGES = {
+    "LAST_ADMIN_REQUIRED": "Keep at least one enabled system administrator for this organization.",
     "AUTH_INVALID_CREDENTIALS": "Unable to sign in. Check your credentials or sign in again.",
     "AUTH_FORBIDDEN": "This action is not permitted for your account.",
     "AUTH_CSRF_REJECTED": "Request could not be verified. Reload and try again.",

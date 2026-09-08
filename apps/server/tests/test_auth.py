@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from quotepilot_api import auth
 from quotepilot_api.auth import AuthError, AuthService, Capability, Principal, Role
 from quotepilot_api.auth_api import auth_service
-from quotepilot_api.auth_models import AuthSession, BusinessAuditEvent, User
+from quotepilot_api.auth_models import AuthLimit, AuthSession, BusinessAuditEvent, User
 from quotepilot_api.main import app
 from quotepilot_api.migrate import migrate
 from quotepilot_api.tenants import Tenant, TenantContext, TenantService
@@ -64,6 +64,151 @@ def ready(client: TestClient, service: AuthService) -> None:
     )
     assert response.status_code == 200, response.text
     client.headers["x-csrf-token"] = response.json()["csrf_token"]
+
+
+def test_last_administrator_guard_and_concurrent_disable(
+    client: TestClient, service: AuthService, database: Engine
+) -> None:
+    ready(client, service)
+    first_token = str(client.cookies.get("quotepilot_dev"))
+    me = client.get("/api/me").json()
+    first_id = me["user_id"]
+    response = client.patch(f"/api/admin/users/{first_id}", json={"version": 2, "disabled": True})
+    assert response.status_code == 409 and response.json()["code"] == "LAST_ADMIN_REQUIRED"
+    with Session(database) as session:
+        first = session.get(User, UUID(first_id))
+        assert first is not None and not first.disabled and first.version == 2
+        assert (
+            session.scalar(
+                select(BusinessAuditEvent).where(BusinessAuditEvent.action == "user_updated")
+            )
+            is None
+        )
+    response = client.post(
+        "/api/admin/users", json={"login": "backup", "password": PASSWORD, "role": "system_admin"}
+    )
+    assert response.status_code == 201
+    second_id = response.json()["id"]
+    sign_in(client, "backup")
+    response = client.post(
+        "/api/auth/password", json={"current_password": PASSWORD, "new_password": NEW}
+    )
+    assert response.status_code == 200
+    second_token = str(client.cookies.get("quotepilot_dev"))
+
+    def disable(token: str, target: str) -> str:
+        try:
+            with service.authenticated(token) as (session, principal):
+                service.update_user(session, principal, UUID(target), 2, True, False)
+            return "disabled"
+        except AuthError as error:
+            return error.code
+
+    with ThreadPoolExecutor(2) as pool:
+        futures = [
+            pool.submit(disable, first_token, second_id),
+            pool.submit(disable, second_token, first_id),
+        ]
+        assert [future.result() for future in futures].count("disabled") == 1
+    with Session(database) as session:
+        enabled = list(session.scalars(select(User).where(User.disabled.is_(False))))
+        assert len(enabled) == 1
+        remaining_token = first_token if str(enabled[0].id) == first_id else second_token
+        remaining_id = str(enabled[0].id)
+    assert disable(remaining_token, remaining_id) == "LAST_ADMIN_REQUIRED"
+    with service.authenticated(remaining_token) as (session, principal):
+        service.update_user(session, principal, principal.user_id, 2, None, True)
+    with pytest.raises(AuthError), service.authenticated(remaining_token):
+        pass
+
+
+def test_admin_and_logout_audit_tenant_integrity(
+    client: TestClient, service: AuthService, database: Engine
+) -> None:
+    ready(client, service)
+    token = str(client.cookies.get("quotepilot_dev"))
+    with service.authenticated(token) as (_, principal):
+        tenant_id, actor_id = principal.context.tenant_id, principal.user_id
+    other = TenantService(service.sessions).provision("UTC")
+    response = client.post(
+        "/api/admin/users", json={"login": "sales", "password": PASSWORD, "role": "sales_admin"}
+    )
+    assert response.status_code == 201
+    target = response.json()["id"]
+    for version, changes in [(1, {"revoke_sessions": True}), (2, {"disabled": True})]:
+        response = client.patch(f"/api/admin/users/{target}", json={"version": version, **changes})
+        assert response.status_code == 200, response.text
+    assert client.post("/api/auth/logout", json={}).status_code == 204
+    with Session(database) as session:
+        events = list(
+            session.scalars(
+                select(BusinessAuditEvent).where(BusinessAuditEvent.tenant_id == tenant_id)
+            )
+        )
+        assert {"logout", "user_created", "user_updated"} <= {event.action for event in events}
+        updates = [event for event in events if event.action == "user_updated"]
+        assert len(updates) == 2 and all(
+            event.actor_id == actor_id and str(event.target_id) == target for event in updates
+        )
+        assert any("revoke=True" in event.evidence for event in updates)
+        assert any("disabled=True" in event.evidence for event in updates)
+        assert (
+            session.scalar(
+                select(BusinessAuditEvent).where(BusinessAuditEvent.tenant_id == other.tenant_id)
+            )
+            is None
+        )
+    with pytest.raises(IntegrityError), service.sessions.begin() as session:
+        session.add(
+            BusinessAuditEvent(
+                tenant_id=other.tenant_id,
+                actor_id=actor_id,
+                action="logout",
+                outcome="success",
+                evidence="",
+            )
+        )
+
+
+def test_login_limits_http_contract_and_durable_reset(
+    client: TestClient, service: AuthService, database: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = {"organization": "unknown", "login": "missing", "password": PASSWORD}
+    for _ in range(10):
+        assert client.post("/api/auth/login", json=payload).status_code == 401
+    response = client.post("/api/auth/login", json=payload)
+    assert response.status_code == 429 and response.headers["Retry-After"] == "900"
+    assert response.json() == {
+        "code": "AUTH_RATE_LIMITED",
+        "message": "Too many attempts. Try again in 15 minutes.",
+    }
+    fresh = AuthService(service.sessions)
+    with pytest.raises(AuthError) as error:
+        fresh.login("unknown", "missing", PASSWORD, "different-source")
+    assert error.value.status == 429
+    with Session(database) as session:
+        counter = session.get(AuthLimit, auth.digest("account:unknown:missing"))
+        assert counter is not None and counter.attempts == 11
+    timestamp = auth.now()
+    monkeypatch.setattr(auth, "now", lambda: timestamp + timedelta(minutes=16))
+    assert client.post("/api/auth/login", json=payload).status_code == 401
+
+
+@pytest.mark.parametrize(("dimension", "maximum"), [("source:direct", 60), ("tenant:unknown", 200)])
+def test_login_source_and_tenant_thresholds(
+    service: AuthService, dimension: str, maximum: int
+) -> None:
+    # Preload the real durable counter to the boundary; login must enforce its own threshold.
+    with service.sessions.begin() as session:
+        session.add(
+            AuthLimit(key=auth.digest(dimension), started_at=auth.now(), attempts=maximum - 1)
+        )
+    with pytest.raises(AuthError) as error:
+        service.login("unknown", "missing", PASSWORD, "direct")
+    assert error.value.status == 401
+    with pytest.raises(AuthError) as error:
+        service.login("unknown", "different", PASSWORD, "direct")
+    assert error.value.status == 429
 
 
 def test_bootstrap_repeated_concurrent_and_atomic(
@@ -429,6 +574,9 @@ def test_renewal_disable_race_and_absolute_expiry(
     client: TestClient, service: AuthService, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ready(client, service)
+    client.post(
+        "/api/admin/users", json={"login": "backup", "password": PASSWORD, "role": "system_admin"}
+    ).raise_for_status()
     token = str(client.cookies.get("quotepilot_dev"))
     with service.authenticated(token) as (_, principal):
         user_id, csrf = principal.user_id, principal.csrf
@@ -493,6 +641,9 @@ def test_disabled_login_and_denied_audit_survive(
     client: TestClient, service: AuthService, database: Engine
 ) -> None:
     ready(client, service)
+    client.post(
+        "/api/admin/users", json={"login": "backup", "password": PASSWORD, "role": "system_admin"}
+    ).raise_for_status()
     token = str(client.cookies.get("quotepilot_dev"))
     with service.authenticated(token) as (session, principal):
         service.update_user(session, principal, principal.user_id, 2, True, False)

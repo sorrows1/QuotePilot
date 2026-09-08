@@ -16,9 +16,9 @@ through the organization's approved secure credential channel; verify the recipi
 Do not put passwords in tickets, ordinary email, terminal arguments or logs. Users
 must replace the initial password before using business or admin capabilities.
 There is no public signup/bootstrap or final recovery workflow. ADR-017/QT-028 owns
-production invitation/recovery. An administrator who disables their own last active
-admin account requires an explicitly approved future recovery procedure; create and
-verify another tenant administrator before disabling the last one.
+production invitation/recovery. Disabling the last enabled system administrator is
+rejected with `LAST_ADMIN_REQUIRED`, including concurrent disable requests. Create
+and verify another tenant administrator before disabling an administrator account.
 
 ## Identity and session contract
 
