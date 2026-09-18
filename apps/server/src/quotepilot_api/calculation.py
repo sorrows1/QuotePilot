@@ -191,7 +191,8 @@ class CalculationService:
                 if any(f.kind == kind for f in findings):
                     state = candidate
             # Evaluation time itself is excluded; immutable proposal provenance, explicit
-            # evidence windows, settings, inputs, outcomes and required availability remain material.
+            # evidence windows, settings, inputs, outcomes and required availability remain
+            # material.
             material_lines = [x.model_dump() for x in lines]
             for input_line, material in zip(checked.lines, material_lines, strict=False):
                 if not input_line.availability_required:
