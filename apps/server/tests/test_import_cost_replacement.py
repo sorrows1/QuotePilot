@@ -3,7 +3,8 @@
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, Session, select
+from sqlalchemy import Engine, select
+from sqlalchemy.orm import Session
 from test_auth import ready
 from test_imports import commit, import_file, preview, upload
 
