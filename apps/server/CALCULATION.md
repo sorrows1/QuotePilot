@@ -2,8 +2,9 @@
 
 `CalculationService.calculate(context, request, actor=..., pricing_as_of=...)`
 is a trusted server application service. It performs read-only evaluation; there
-is no new HTTP endpoint or database migration. Callers derive tenant and Principal
-from authentication. The optional instant is for trusted historical evaluation and
+is no new HTTP endpoint or database migration. Callers derive tenant context from
+authentication. An optional Principal is used only for tenant-scope validation during
+direct trusted calls; it is never treated as the negotiated-price proposer. The optional instant is for trusted historical evaluation and
 testing; HTTP/model inputs must never choose it. Otherwise the server captures UTC
 once. Current settings and all commercial reads share one PostgreSQL read-only
 REPEATABLE READ transaction.
@@ -28,13 +29,16 @@ remains unknown, including when controls are disabled. Enabled line and quote
 margin controls fail closed on missing, ambiguous or undefined margin. Threshold
 decisions compare exact products, never divided or displayed margin.
 
-Negotiated pricing is a provisional result for review. An authenticated sales
-Principal must explicitly adopt a nonnegative unit price with a nonblank reason
-through the caller's edit workflow. Product identity and normal price/policy must
-resolve first. Customer/model candidate text is not part of this input contract;
-it cannot create an adoption. The result records proposer, reason, instant,
-normal reference, absolute deviation and exact rational deviation operands. A
-zero reference has no percentage deviation. No normal discount is reapplied to a
+Negotiated pricing is a provisional result for review. QT-008's authenticated sales
+edit workflow must explicitly adopt a nonnegative unit price with a nonblank reason
+and bind the immutable proposer identity and proposal timestamp to the quote revision
+before calling this evaluator. Product identity and normal price/policy must resolve
+first. Customer/model candidate text is not part of this input contract; it cannot
+create an adoption. Recalculation by a manager or background process preserves the
+original proposer/reason/timestamp rather than replacing them with the recalculating
+actor or evaluation instant. The result records that proposal evidence, normal
+reference, absolute deviation and exact rational deviation operands. A zero reference
+has no percentage deviation. No normal discount is reapplied to a
 negotiated unit price, and every admitted proposal emits `NEGOTIATED_UNIT_PRICE`.
 The normal policy rate remains evidence for its configured discount authority
 check. An explicitly disallowed discount policy emits `DISCOUNT_NOT_PERMITTED`.
@@ -58,7 +62,7 @@ calculation continues and no stale quantity is presented as current availability
 Results retain selected record IDs (including pricebook assignment authority), source/version fields, effective windows,
 conversion evidence, full settings snapshot/revision and the explicit
 NO_DISCOUNT_POLICY result. `commercial_fingerprint` binds tenant, case/revision,
-inputs, settings, selected authority, proposer and all findings. Recalculation at
+inputs, settings, selected authority, immutable proposal provenance and all findings. Recalculation at
 a later instant produces a different fingerprint when material authority or
 required availability changes. Time alone and inventory not required by the
 revision are excluded. Consumers must compare freshly calculated results; a hash
@@ -85,7 +89,7 @@ QA-001's live Status is Done; older review-history notes are historical.
 | COM-R04/06; GQ-001, 012, 018–020 | Independent exact money oracles, line/tax rounding, freight/taxability, decimal JSON, ambient-context isolation, 300 seeded cases checked against integer arithmetic |
 | COM-R07/09; GQ-013–016, 018–020, 024–025, 036, 038 | Line/quote strict inequalities, equality, display-hidden breach, unknown/ambiguous/zero margin, final-total authority, real versioned settings |
 | COM-R08; GQ-017, 034 | Exact freshness boundary, missing/future/stale evidence, aggregate-only output and no unsupported delivery fields |
-| COM2-R01–05/09; GQ-021–027, 040–041 | Authenticated adoption, no double discount, exact deviation, zero reference, multiple exceptions, clarification/substitution, unresolved authority and invalid admission |
+| COM2-R01–05/09; GQ-021–027, 040–041 | Authenticated adoption provenance preserved across recalculation, no double discount, exact deviation, zero reference, multiple exceptions, clarification/substitution, unresolved authority and invalid admission |
 | COM-R11/12, COM2-R06–08; GQ-028–031, 033, 035 | Material fingerprints, explicit absent-policy evidence, authority rollover, real concurrent settings/policy changes in one MVCC snapshot; approval/revision lifecycle remains QT-008/QT-020 |
 | GQ-032, 037 | Number allocation and durable rejection/retry belong to QT-004/QT-008/QT-020/QT-022; no claim of implementing those lifecycle scenarios here |
 
