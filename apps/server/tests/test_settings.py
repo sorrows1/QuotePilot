@@ -357,7 +357,7 @@ def test_migration_populated_baseline_and_disposable_backout(empty_database: Eng
         assert session.get(User, user) is not None
         assert session.get(TenantSettings, tenant).business_timezone == "UTC"  # type: ignore[union-attr]
         assert session.execute(text("SELECT version_num FROM alembic_version")).scalars().all() == [
-            "0005_imports"
+            "0006_archive_authority"
         ]
     migrate(empty_database, "downgrade", "0003_auth_commercial_merge")
     migrate(empty_database)
