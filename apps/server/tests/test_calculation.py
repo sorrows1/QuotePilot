@@ -294,11 +294,7 @@ def test_gq024_025_independent_margins_and_all_exceptions(h: Harness) -> None:
         True,
         D("10000"),
     )
-    result = h.run(
-        lines=(
-            h.line(quantity="300", negotiated=h.negotiated(reason="package")),
-        )
-    )
+    result = h.run(lines=(h.line(quantity="300", negotiated=h.negotiated(reason="package")),))
     assert result.total == D("11850.00") and result.margin.extended_cost == D("9900")
     assert codes(result) == {
         "NEGOTIATED_UNIT_PRICE",

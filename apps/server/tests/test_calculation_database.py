@@ -284,11 +284,7 @@ def test_negotiation_does_not_write_master_data(database: Engine) -> None:
         proposed_at=AS_OF - timedelta(minutes=1),
     )
     c.request = c.request.model_copy(
-        update={
-            "lines": (
-                c.request.lines[0].model_copy(update={"negotiated": proposal}),
-            )
-        }
+        update={"lines": (c.request.lines[0].model_copy(update={"negotiated": proposal}),)}
     )
     manager = Principal(c.context, uuid4(), Role.SALES_MANAGER, "manager", False, uuid4(), "")
     first = c.calculate(actor=sales)
