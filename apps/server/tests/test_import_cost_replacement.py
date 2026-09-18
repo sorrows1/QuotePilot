@@ -4,11 +4,11 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, Session, select
+from test_auth import ready
+from test_imports import commit, import_file, preview, upload
 
 from quotepilot_api import commercial_schema as schema
 from quotepilot_api.auth import AuthService
-from test_auth import ready
-from test_imports import commit, import_file, preview, upload
 
 
 def test_product_cost_replacement_can_change_uom(
