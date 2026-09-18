@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from quotepilot_api.auth import AuthError
 from quotepilot_api.auth_api import auth_config
+from quotepilot_api.settings import SettingsError, SettingsInput
 
 MESSAGES = {
     "LAST_ADMIN_REQUIRED": "Keep at least one enabled system administrator for this organization.",
@@ -63,7 +64,14 @@ class BrowserBoundary:
             if message["type"] == "http.disconnect":
                 return
             body.extend(message.get("body", b""))
-            if len(body) > 4096:
+            limit = (
+                2800000
+                if scope["path"] == "/api/admin/settings/logo" and request.method == "PUT"
+                else 16384
+                if scope["path"] == "/api/admin/settings"
+                else 4096
+            )
+            if len(body) > limit:
                 await failure("VALIDATION_ERROR", 413)(scope, receive, send)
                 return
             if not message.get("more_body", False):
@@ -86,12 +94,46 @@ class BrowserBoundary:
 
 
 def install_errors(app: FastAPI) -> None:
+    @app.exception_handler(SettingsError)
+    async def settings_error(request: Request, error: SettingsError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "code": error.code,
+                "message": "Settings changed elsewhere. Reload and review before saving."
+                if error.status == 409
+                else "Check the settings fields below.",
+                "fields": error.fields,
+            },
+            status_code=error.status,
+        )
+
     @app.exception_handler(AuthError)
     async def auth_error(request: Request, error: AuthError) -> JSONResponse:
         return failure(error.code, error.status)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
+        if request.url.path.startswith("/api/admin/settings"):
+            allowed = {
+                *SettingsInput.model_fields,
+                "expected_edit_version",
+                "logo",
+                "media_type",
+                "data_base64",
+            }
+            fields = {
+                str(e["loc"][-1]): "Check the field type, required range and decimal precision."
+                for e in error.errors()
+                if str(e["loc"][-1]) in allowed
+            }
+            return JSONResponse(
+                {
+                    "code": "SETTINGS_INVALID",
+                    "message": "Check the settings fields below.",
+                    "fields": fields,
+                },
+                status_code=422,
+            )
         # Pydantic errors may contain the original password or unknown input values.
         return failure("VALIDATION_ERROR", 422)
 

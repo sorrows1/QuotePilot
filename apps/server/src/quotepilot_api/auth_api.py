@@ -23,6 +23,7 @@ from quotepilot_api.auth import (
 )
 from quotepilot_api.auth_models import User
 from quotepilot_api.database import database_engine
+from quotepilot_api.settings import setup_complete
 
 
 @dataclass(frozen=True)
@@ -130,6 +131,7 @@ class Me(BaseModel):
     role: Role
     must_change_password: bool
     csrf_token: str
+    setup_complete: bool = False
 
     @classmethod
     def principal(cls, principal: Principal) -> "Me":
@@ -183,13 +185,18 @@ def login(
         request.client.host if request.client else "unknown",
     )
     set_cookie(response, config, token)
-    return Me.principal(principal)
+    with service.sessions.begin() as session:
+        result = Me.principal(principal)
+        result.setup_complete = setup_complete(session, principal.context)
+        return result
 
 
 @router.get("/api/me", response_model=Me)
 def me(request: Request, service: Service, config: Config) -> Me:
-    with service.authenticated(*credentials(request, config)) as (_, principal):
-        return Me.principal(principal)
+    with service.authenticated(*credentials(request, config)) as (session, principal):
+        result = Me.principal(principal)
+        result.setup_complete = setup_complete(session, principal.context)
+        return result
 
 
 @router.post("/api/auth/refresh", response_model=Me)
@@ -197,7 +204,9 @@ def refresh(request: Request, service: Service, config: Config) -> Me:
     service.limit([("renew-source:" + (request.client.host if request.client else "unknown"), 300)])
     with service.authenticated(*credentials(request, config)) as (session, principal):
         service.renew(session, principal)
-        return Me.principal(principal)
+        result = Me.principal(principal)
+        result.setup_complete = setup_complete(session, principal.context)
+        return result
 
 
 @router.post("/api/auth/logout", status_code=204)
@@ -229,7 +238,10 @@ def password(
             body.new_password.get_secret_value(),
         )
     set_cookie(response, config, replacement)
-    return Me.principal(changed)
+    with service.sessions.begin() as session:
+        result = Me.principal(changed)
+        result.setup_complete = setup_complete(session, changed.context)
+        return result
 
 
 @router.get("/api/admin/users", response_model=list[UserOutput])

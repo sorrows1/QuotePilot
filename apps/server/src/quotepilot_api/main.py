@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from quotepilot_api.auth_api import router
 from quotepilot_api.auth_http import BrowserBoundary, install_errors
+from quotepilot_api.settings_api import router as settings_router
 
 
 class HealthResponse(BaseModel):
@@ -15,6 +16,7 @@ class HealthResponse(BaseModel):
 app = FastAPI(title="QuotePilot API", version="0.1.0")
 app.add_middleware(BrowserBoundary)
 app.include_router(router)
+app.include_router(settings_router)
 install_errors(app)
 
 

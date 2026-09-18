@@ -1,3 +1,5 @@
+import { api, ApiError } from './api'
+import { SettingsPanel } from './SettingsPanel'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   AppFrame,
@@ -14,6 +16,7 @@ type Me = {
   role: string
   must_change_password: boolean
   csrf_token: string
+  setup_complete: boolean
 }
 
 type User = {
@@ -22,35 +25,6 @@ type User = {
   role: string
   disabled: boolean
   version: number
-}
-
-class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message)
-  }
-}
-
-async function api<T>(path: string, method = 'GET', body?: unknown, csrf = ''): Promise<T> {
-  const response = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-QuotePilot-Request': '1',
-      'X-CSRF-Token': csrf,
-    },
-    ...(method !== 'GET' ? { body: JSON.stringify(body ?? {}) } : {}),
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new ApiError(
-      response.status,
-      typeof error.message === 'string' ? error.message : 'Service unavailable. Try again.',
-    )
-  }
-
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
 function field(form: HTMLFormElement, key: string) {
@@ -354,6 +328,24 @@ export function App() {
                     </Button>
                   </div>
                 </section>
+
+                {me.role === 'system_admin' ? (
+                  <SettingsPanel
+                    key={me.user_id}
+                    csrf={me.csrf_token}
+                    onComplete={() =>
+                      setMe((previous) =>
+                        previous ? { ...previous, setup_complete: true } : null,
+                      )
+                    }
+                  />
+                ) : !me.setup_complete ? (
+                  <StatePanel
+                    kind="info"
+                    title="Company setup pending"
+                    message="Company setup pending; contact your administrator."
+                  />
+                ) : null}
 
                 {me.role === 'system_admin' ? (
                   <section className="content-section" aria-labelledby="users-title">
