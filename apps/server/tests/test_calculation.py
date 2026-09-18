@@ -212,6 +212,11 @@ def test_gq015_016_020_margin_blocks(
     result = h.run()
     assert result.state == "HARD_BLOCK" and expected in codes(result)
     assert result.total == (D("0.00") if mode == "zero" else D("100.00"))
+    if mode == "ambiguous":
+        ambiguous_findings = [finding for finding in result.findings if finding.code == expected]
+        assert len(ambiguous_findings) == int(line_control) + int(quote_control)
+        assert sum(finding.line_id == "L1" for finding in ambiguous_findings) == int(line_control)
+        assert sum(finding.line_id is None for finding in ambiguous_findings) == int(quote_control)
 
 
 @pytest.mark.parametrize(

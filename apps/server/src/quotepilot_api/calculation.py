@@ -315,9 +315,13 @@ class CalculationService:
                 records.append(evidence("cost", cost_row))
                 cost = qty * factor(line.pricing_uom, cost_row["uom"]) * cost_row["unit_cost"]
         except CommercialError as exc:
-            ambiguous = str(exc) == "AMBIGUOUS_COST"
-            if config.line_margin_control_enabled or config.quote_margin_control_enabled:
-                issue(str(exc))
+            code = str(exc)
+            ambiguous = code == "AMBIGUOUS_COST"
+            if (
+                not ambiguous
+                and (config.line_margin_control_enabled or config.quote_margin_control_enabled)
+            ):
+                issue(code)
         line_margin = margin(net, cost, ambiguous=ambiguous)
         issues.extend(
             check_margin(
