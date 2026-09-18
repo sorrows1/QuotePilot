@@ -1,22 +1,9 @@
+import { api, ApiError } from './api'
+import { SettingsPanel } from './SettingsPanel'
 import { useEffect, useState, type FormEvent } from 'react'
 
-type Me = { user_id: string; login: string; role: string; must_change_password: boolean; csrf_token: string }
+type Me = { user_id: string; login: string; role: string; must_change_password: boolean; csrf_token: string; setup_complete: boolean }
 type User = { id: string; login: string; role: string; disabled: boolean; version: number }
-class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message) }
-}
-async function api<T>(path: string, method = 'GET', body?: unknown, csrf = ''): Promise<T> {
-  const response = await fetch(path, {
-    method, credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-QuotePilot-Request': '1', 'X-CSRF-Token': csrf },
-    ...(method !== 'GET' ? { body: JSON.stringify(body ?? {}) } : {}),
-  })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new ApiError(response.status, typeof error.message === 'string' ? error.message : 'Service unavailable. Try again.')
-  }
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>
-}
 function field(form: HTMLFormElement, key: string) { return String(new FormData(form).get(key) ?? '') }
 export function App() {
   const [me, setMe] = useState<Me | null>(null)
@@ -108,6 +95,7 @@ export function App() {
       </> : <>
         <h2>Workspace</h2><p className="lede">You are signed in. Quotation workflows will be added in later implementation tasks.</p>
         <button disabled={busy} onClick={() => void run(async () => { setMe(await api<Me>('/api/auth/refresh', 'POST', {}, me.csrf_token)); setNotice('Session renewed for up to 30 minutes.') })}>Keep working</button>
+        {me.role === 'system_admin' ? <SettingsPanel key={me.user_id} csrf={me.csrf_token} onComplete={() => setMe(previous => previous ? { ...previous, setup_complete: true } : null)} /> : !me.setup_complete ? <p role="status">Company setup pending; contact your administrator.</p> : null}
         {me.role === 'system_admin' ? <section aria-labelledby="users-title">
           <h2 id="users-title">Manage users</h2>
           <form onSubmit={createUser}><fieldset disabled={busy}><legend>Create user</legend>

@@ -391,7 +391,17 @@ def test_history_and_storage_constraints(database: Engine) -> None:
 
 def test_migration_preserves_baseline_and_reupgrade(empty_database: Engine) -> None:
     migrate(empty_database, revision="0001_tenant_baseline")
-    tenant = TenantService(sessionmaker(empty_database)).provision("Asia/Singapore")
+    tenant = TenantContext(uuid4())
+    # Seed using the historical schema, not today's expanded ORM mapping.
+    with empty_database.begin() as connection:
+        connection.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": tenant.tenant_id})
+        connection.execute(
+            text(
+                "INSERT INTO tenant_settings (tenant_id, business_timezone) "
+                "VALUES (:id, 'Asia/Singapore')"
+            ),
+            {"id": tenant.tenant_id},
+        )
     migrate(empty_database)
     assert set(s.TABLES) <= set(inspect(empty_database).get_table_names())
     with Session(empty_database) as session:

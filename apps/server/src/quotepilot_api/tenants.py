@@ -5,8 +5,20 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import DateTime, ForeignKey, String, Uuid, func, select, update
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    Uuid,
+    func,
+    select,
+    update,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+
+from quotepilot_api.settings_fields import SettingsFields
 
 
 class Base(DeclarativeBase):
@@ -21,11 +33,26 @@ class Tenant(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
-class TenantSettings(Base):
+class TenantSettings(SettingsFields, Base):
     __tablename__ = "tenant_settings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "current_logo_asset_id"],
+            ["brand_assets.tenant_id", "brand_assets.id"],
+            name="tenant_settings_logo",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "active_settings_revision"],
+            ["settings_revisions.tenant_id", "settings_revisions.revision"],
+            name="settings_active_revision",
+        ),
+    )
 
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     business_timezone: Mapped[str] = mapped_column(String(255))
+    setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    edit_version: Mapped[int] = mapped_column(Integer, server_default="1")
+    active_settings_revision: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -69,7 +96,10 @@ class TenantRepository:
         timezone = validate_timezone(business_timezone)
         self.session.add(Tenant(id=tenant_id))
         self.session.flush()
+        from quotepilot_api.settings_models import QuoteNumberCounter
+
         self.session.add(TenantSettings(tenant_id=tenant_id, business_timezone=timezone))
+        self.session.add(QuoteNumberCounter(tenant_id=tenant_id))
         self.session.flush()
 
     def get(self, context: TenantContext, tenant_id: UUID) -> Tenant | None:
@@ -92,6 +122,7 @@ class TenantRepository:
         changed = self.session.scalar(
             update(TenantSettings)
             .where(TenantSettings.tenant_id == owner, TenantSettings.tenant_id == tenant_id)
+            .where(TenantSettings.setup_completed_at.is_(None))
             .values(business_timezone=timezone, updated_at=func.clock_timestamp())
             .returning(TenantSettings.tenant_id)
         )

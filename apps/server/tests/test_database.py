@@ -82,6 +82,10 @@ def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
         "business_audit_events",
         "auth_limits",
         "commercial_write_guards",
+        "settings_revisions",
+        "brand_assets",
+        "quote_numbers",
+        "quote_number_counters",
         *TABLES,
     }
     for _ in range(2):
@@ -92,7 +96,11 @@ def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
         assert inspector.get_pk_constraint("tenant_settings")["constrained_columns"] == [
             "tenant_id"
         ]
-        fk = inspector.get_foreign_keys("tenant_settings")[0]
+        fk = next(
+            key
+            for key in inspector.get_foreign_keys("tenant_settings")
+            if key["referred_table"] == "tenants"
+        )
         assert (fk["constrained_columns"], fk["referred_table"], fk["referred_columns"]) == (
             ["tenant_id"],
             "tenants",
@@ -105,7 +113,11 @@ def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
                 column_type = columns[timestamp]["type"]
                 assert isinstance(column_type, DateTime) and column_type.timezone
                 assert columns[timestamp]["default"] is not None
-            assert all(not column["nullable"] for column in columns.values())
+            required = [key, "created_at", "updated_at"]
+            if table == "tenant_settings":
+                required += ["business_timezone", "edit_version", "currency_code"]
+                assert columns["company_name"]["nullable"]  # incomplete setup draft
+            assert all(not columns[name]["nullable"] for name in required)
         with empty_database.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM tenants")) == 0
             assert connection.scalar(text("SHOW timezone")) == "UTC"

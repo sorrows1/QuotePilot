@@ -94,3 +94,12 @@ button:disabled { opacity: .6; cursor: wait; }
 .users { padding: 0; list-style: none; }
 .users li { padding: 16px 0; border-top: 1px solid #d9dee5; overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.settings-panel { margin-block: 2rem; padding-block: 1rem; border-block: 1px solid #ccc; }
+.settings-panel nav { flex-wrap: wrap; }
+.settings-panel [aria-current="step"] { outline: 2px solid currentColor; outline-offset: 2px; }
+.settings-panel small { display: block; font-weight: normal; }
+.settings-panel textarea { width: 100%; min-height: 6rem; font: inherit; }
+.settings-panel dt { font-weight: bold; }
+.settings-panel dd { margin: 0 0 1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-panel input, .settings-panel select { max-width: 100%; }
