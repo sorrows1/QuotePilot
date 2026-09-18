@@ -218,7 +218,11 @@ def plan(
                 continue
             conflicts = candidates
             if "valid_from" in data:
-                conflicts = [r for r in candidates if overlap(r, data, "valid_from", "valid_to")]
+                conflicts = [
+                    r
+                    for r in candidates
+                    if not r["archived"] and overlap(r, data, "valid_from", "valid_to")
+                ]
                 if job.kind == "prices":
                     conflicts = [
                         r for r in conflicts if overlap(r, data, "quantity_min", "quantity_max")
