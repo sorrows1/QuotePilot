@@ -91,7 +91,7 @@ The narrow OOXML reader uses the existing standard-library ZIP/XML data model pl
 
 ## Verification and operation
 
-Run `node scripts/server.mjs pytest tests/test_imports.py`, `npm run check`, and
+Run `node scripts/server.mjs pytest tests/test_imports.py tests/test_import_cost_replacement.py`, `npm run check`, and
 `npm run test:e2e`. Tests use unique disposable databases; never reset an existing
 database. Coverage includes parsing/exact decimals, unsafe files, mapping/errors,
 zero commercial writes during preview, atomic rollback, reference changes, history,
