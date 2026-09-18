@@ -106,7 +106,7 @@ required scenario meanings and acceptance checklist; attached source files are s
 artifacts rather than a second authority. See `tests/fixtures/imports/README.md` for the
 explicit contract-to-fixture mapping and data dictionaries.
 
-Migration `0005_imports` adds only `import_jobs`. Apply with `npm run db:migrate` before
+Migration `0005_imports` adds only `import_jobs`. Migration `0006_archive_authority` updates existing effective-authority overlap functions so archived commercial evidence remains preserved but does not occupy current authority. Apply with `npm run db:migrate` before
 running the changed app. Backout to `0004_tenant_settings` drops staged files, previews
 and idempotency receipts; it does not undo committed business records. On a populated
 environment first stop import writes, preserve a verified database backup and reconcile
