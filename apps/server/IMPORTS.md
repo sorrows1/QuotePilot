@@ -36,9 +36,11 @@ QT-019 owns later source-versioned durable indexing intent.
   normalization. Source provenance and inventory import timestamps are excluded from
   equivalence; original stored provenance remains unchanged. Conflicting changes fail.
 - **Replace effective** is limited to prices and costs. Exactly one unarchived open
-  predecessor must start strictly earlier; UOM and price tier must match. The old window
-  closes at the new start, and a new evidence ID is inserted. Numeric history is never
-  overwritten or deleted. Closed windows cannot be extended or rewritten.
+  predecessor must start strictly earlier. Price replacement keeps the same UOM and
+  quantity tier; product-cost authority is scoped to the product regardless of UOM, so a
+  later cost may use a different UOM. The old window closes at the new start, and a new
+  evidence ID is inserted. Numeric history is never overwritten or deleted. Closed
+  windows cannot be extended or rewritten.
 
 Duplicate identities inside the same file are errors even with Skip identical. Archived
 keys remain reserved. Pricebook key/version is explicit; new versions require valid,
@@ -98,9 +100,11 @@ includes invalid rows/download, mapping, mobile preview, lost commit response, s
 retry and reopening a receipt. Browser plugin is not available in this session, so
 the repository's existing Playwright gate is used.
 
-Bounded fixtures adapt DATA-001's documented SYN-* namespace and scenarios. Its Notion
-status is Done, but attachment download returned 404; the full attachment pack has not
-been verified. See `tests/fixtures/imports/README.md` for provenance and dictionaries.
+Bounded fixtures are QT-006's schema-specific adaptation of DATA-001's canonical
+schema-independent fixture contract. The DATA-001 page itself defines the SYN-* namespace,
+required scenario meanings and acceptance checklist; attached source files are supporting
+artifacts rather than a second authority. See `tests/fixtures/imports/README.md` for the
+explicit contract-to-fixture mapping and data dictionaries.
 
 Migration `0005_imports` adds only `import_jobs`. Apply with `npm run db:migrate` before
 running the changed app. Backout to `0004_tenant_settings` drops staged files, previews
