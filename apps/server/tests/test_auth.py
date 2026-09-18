@@ -502,7 +502,17 @@ def test_audit_failure_rolls_back_and_append_only(
 def test_populated_baseline_upgrade_and_fk(empty_database: Engine) -> None:
     migrate(empty_database, revision="0001_tenant_baseline")
     sessions = sessionmaker(empty_database)
-    context = TenantService(sessions).provision("Asia/Singapore")
+    context = TenantContext(uuid4())
+    # Seed using the historical schema, not today's expanded ORM mapping.
+    with empty_database.begin() as connection:
+        connection.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": context.tenant_id})
+        connection.execute(
+            text(
+                "INSERT INTO tenant_settings (tenant_id, business_timezone) "
+                "VALUES (:id, 'Asia/Singapore')"
+            ),
+            {"id": context.tenant_id},
+        )
     migrate(empty_database)
     settings = TenantService(sessions).get_settings(context, context.tenant_id)
     assert settings is not None and settings.business_timezone == "Asia/Singapore"
