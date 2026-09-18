@@ -25,8 +25,7 @@ def test_product_cost_replacement_can_change_uom(
     import_file(
         client,
         "product_costs",
-        b"sku,uom,unit_cost,valid_from\n"
-        b"SYN-SKU-TAPE-24MM,EA,1,2026-01-01T00:00:00Z\n",
+        b"sku,uom,unit_cost,valid_from\nSYN-SKU-TAPE-24MM,EA,1,2026-01-01T00:00:00Z\n",
     )
 
     replacement = preview(
@@ -34,8 +33,7 @@ def test_product_cost_replacement_can_change_uom(
         upload(
             client,
             "product_costs",
-            b"sku,uom,unit_cost,valid_from\n"
-            b"SYN-SKU-TAPE-24MM,BOX,12,2026-10-01T00:00:00Z\n",
+            b"sku,uom,unit_cost,valid_from\nSYN-SKU-TAPE-24MM,BOX,12,2026-10-01T00:00:00Z\n",
         ),
         "replace_effective",
     )
