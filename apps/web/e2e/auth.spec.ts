@@ -21,6 +21,15 @@ test('bootstrap, forced change, restore, admin disable, logout and mobile login'
   await page.goto('/')
   await expect(page).toHaveTitle('QuotePilot')
   await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+  const organizationField = page.getByLabel('Organization code')
+  await organizationField.focus()
+  await expect(organizationField).toBeFocused()
+  const focusOutline = await organizationField.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { style: style.outlineStyle, width: Number.parseFloat(style.outlineWidth) }
+  })
+  expect(focusOutline.style).not.toBe('none')
+  expect(focusOutline.width).toBeGreaterThanOrEqual(2)
   await login(page, 'admin', 'invalid-password')
   await expect(page.getByRole('alert')).toContainText('Unable to sign in')
   await login(page, 'admin', initial)
