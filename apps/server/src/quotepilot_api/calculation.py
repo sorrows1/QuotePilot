@@ -317,9 +317,8 @@ class CalculationService:
         except CommercialError as exc:
             code = str(exc)
             ambiguous = code == "AMBIGUOUS_COST"
-            if (
-                not ambiguous
-                and (config.line_margin_control_enabled or config.quote_margin_control_enabled)
+            if not ambiguous and (
+                config.line_margin_control_enabled or config.quote_margin_control_enabled
             ):
                 issue(code)
         line_margin = margin(net, cost, ambiguous=ambiguous)
