@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { importFlow } from './import-flow'
 const initial = 'initial-browser-password-839!'
 const replacement = 'replacement-browser-password-742!'
 async function login(page: Page, name: string, password: string) {
@@ -14,6 +15,7 @@ async function change(page: Page) {
   await expect(page.getByRole('heading', { name: 'Workspace', exact: true })).toBeVisible()
 }
 test('bootstrap, forced change, restore, admin disable, logout and mobile login', async ({ page, browser }, testInfo) => {
+  test.setTimeout(120000)
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await expect.poll(async () => { try { return (await page.request.get('/')).status() } catch { return 0 } }).toBe(200)
@@ -76,7 +78,7 @@ test('bootstrap, forced change, restore, admin disable, logout and mobile login'
   await expect(page.getByRole('heading', { name: 'Company setup is saved.' })).toBeVisible()
   await page.getByRole('link', { name: 'Go to Imports', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Imports', exact: true })).toBeVisible()
-  await expect(page.getByText(/Import tools are not available yet/)).toBeVisible()
+  await importFlow(page, testInfo)
   await page.getByRole('button', { name: 'Back to Settings', exact: true }).click()
   await page.getByRole('button', { name: 'Edit Company', exact: true }).click()
   await expect(page.getByLabel('Company name', { exact: true })).toHaveValue('Browser Company')

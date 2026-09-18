@@ -1,0 +1,5 @@
+external_key,name
+SYN-CUST-100,Synthetic first customer
+,Missing key
+SYN-CUST-100,Duplicate key
+SYN-CUST-200,

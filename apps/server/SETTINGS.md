@@ -23,7 +23,7 @@ Auth's tenant transaction lock serializes edits. Stale writes return `409 SETTIN
 
 Audit and mutation commit together. Audit failure rolls everything back. Evidence contains revision and a hexadecimal field bitmap, with bits following `SNAPSHOT_FIELDS` in settings.py; it never contains field values, company/address text, thresholds or image bytes. Database triggers reject UPDATE/DELETE/TRUNCATE of history, assets and number reservations. The current row and historical snapshots have tenant-consistent composite logo/revision foreign keys.
 
-The four-step UI supports drafts, step completion, exit/resume, full review, field errors and conflict recovery. Completion explicitly leads to Go to Imports. The imports entry currently explains that QT-006 tools are not available; setup does not claim imports are done.
+The four-step UI supports drafts, step completion, exit/resume, full review, field errors and conflict recovery. Completion explicitly leads to Go to Imports. QT-006 supplies the separate import wizard; setup does not claim imports are done. See [IMPORTS.md](IMPORTS.md).
 
 ## Logo handling
 

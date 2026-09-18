@@ -50,6 +50,17 @@
   background: var(--surface-page);
 }
 
+.import-panel { min-width: 0; }
+.import-panel > fieldset, .import-panel > div, .import-panel > p { margin-block: var(--space-4); }
+.import-panel .field { margin-block: var(--space-3); }
+.import-table { max-width: 100%; overflow-x: auto; }
+.import-table table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.import-table th, .import-table td {
+  padding: var(--space-2); border-bottom: 1px solid var(--border-strong);
+  text-align: left; vertical-align: top; overflow-wrap: anywhere; min-width: 7rem;
+}
+.import-panel ul { display: grid; gap: var(--space-2); padding-left: var(--space-4); }
+
 * {
   box-sizing: border-box;
 }
