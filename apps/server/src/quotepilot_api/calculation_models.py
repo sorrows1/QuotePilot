@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from quotepilot_api.commercial_inputs import Nonnegative, Positive, Uom
+from quotepilot_api.commercial_inputs import Nonnegative, Positive, Uom, utc
 
 
 class FrozenModel(BaseModel):
@@ -17,6 +17,20 @@ class FrozenModel(BaseModel):
 class NegotiatedPrice(FrozenModel):
     unit_price: Nonnegative
     reason: str = Field(min_length=1, max_length=1000)
+    proposer_id: UUID
+    proposed_at: datetime
+
+    @field_validator("proposer_id")
+    @classmethod
+    def non_nil_proposer(cls, value: UUID) -> UUID:
+        if value.int == 0:
+            raise ValueError("Negotiated proposal requires a non-nil proposer")
+        return value
+
+    @field_validator("proposed_at")
+    @classmethod
+    def proposal_time(cls, value: datetime) -> datetime:
+        return utc(value)
 
 
 class CalculationLine(FrozenModel):
