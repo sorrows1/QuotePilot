@@ -116,9 +116,11 @@ export function ImportsPanel({ csrf }: { csrf: string }) {
             <option value="skip_identical">Skip identical records — reject conflicting changes</option>
             {['prices', 'product_costs'].includes(job.kind) ? <option value="replace_effective">Replace effective price/cost — preserve earlier history</option> : null}
           </SelectField>
-          <p>{['prices', 'product_costs'].includes(job.kind)
-            ? 'Replacement closes one earlier open window and creates new authority at the supplied start date. UOM and price tier must match.'
-            : 'Existing details cannot be overwritten. Skip identical records to reimport unchanged data; conflicting changes need new keys or non-overlapping authority windows.'}</p>
+          <p>{job.kind === 'prices'
+            ? 'Replacement closes one earlier open price window and creates new authority at the supplied start date. UOM and price tier must match.'
+            : job.kind === 'product_costs'
+              ? 'Replacement closes one earlier open cost window and creates new product-cost authority at the supplied start date. The new cost may use a different UOM; history is preserved.'
+              : 'Existing details cannot be overwritten. Skip identical records to reimport unchanged data; conflicting changes need new keys or non-overlapping authority windows.'}</p>
           <Button type="button" onClick={() => void run(async () => accept(await api<Job>(`/api/admin/imports/${job.id}/preview`, 'POST', { mapping, mode }, csrf)))}>Validate preview</Button>
         </fieldset>
         {job.preview ? <div className="content-stack">
