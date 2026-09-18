@@ -76,7 +76,12 @@ class Harness:
             }
         )
 
-    def negotiated(self, unit_price: str | Decimal = "39.50", reason: str = "project", **changes: Any) -> NegotiatedPrice:
+    def negotiated(
+        self,
+        unit_price: str | Decimal = "39.50",
+        reason: str = "project",
+        **changes: Any,
+    ) -> NegotiatedPrice:
         return NegotiatedPrice(
             **{
                 "unit_price": D(unit_price),
@@ -252,9 +257,7 @@ def test_gq021_022_023_negotiation(h: Harness) -> None:
     h.repo.price.return_value["unit_price"] = D("42.00")
     h.policy("0.02")
     assert h.run(lines=(h.line(quantity="10"),)).total == D("411.60")
-    line = h.line(
-        quantity="10", negotiated=h.negotiated()
-    )
+    line = h.line(quantity="10", negotiated=h.negotiated())
     result = h.run(lines=(line,))
     calculated = result.lines[0]
     assert result.total == D("395.00")
@@ -293,9 +296,7 @@ def test_gq024_025_independent_margins_and_all_exceptions(h: Harness) -> None:
     )
     result = h.run(
         lines=(
-            h.line(
-                quantity="300", negotiated=h.negotiated(reason="package")
-            ),
+            h.line(quantity="300", negotiated=h.negotiated(reason="package")),
         )
     )
     assert result.total == D("11850.00") and result.margin.extended_cost == D("9900")
@@ -341,9 +342,7 @@ def test_gq038_line_equality(h: Harness) -> None:
 @pytest.mark.parametrize("error", ["MISSING_PRICE", "AMBIGUOUS_PRICE"])
 def test_gq004_040_no_negotiated_fallback(h: Harness, error: str) -> None:
     h.repo.price.side_effect = CommercialError(error)
-    result = h.run(
-        lines=(h.line(negotiated=h.negotiated()),)
-    )
+    result = h.run(lines=(h.line(negotiated=h.negotiated()),))
     assert result.total is None and codes(result) == {error}
     assert result.lines[0].negotiated_unit_price is None
 
