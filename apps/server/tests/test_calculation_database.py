@@ -297,7 +297,11 @@ def test_negotiation_does_not_write_master_data(database: Engine) -> None:
     assert first.total == D("395.00") and second.state == third.state == "APPROVAL_REQUIRED"
     assert first.lines[0].proposer_id == second.lines[0].proposer_id == proposal.proposer_id
     assert first.lines[0].proposed_at == second.lines[0].proposed_at == proposal.proposed_at
-    assert first.commercial_fingerprint == second.commercial_fingerprint == third.commercial_fingerprint
+    assert (
+        first.commercial_fingerprint
+        == second.commercial_fingerprint
+        == third.commercial_fingerprint
+    )
     with c.sessions() as session:
         stored = CommercialRepository(session).get(c.context, "prices", original.id)
         assert stored is not None and stored["unit_price"] == D("42")
