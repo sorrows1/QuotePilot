@@ -25,7 +25,7 @@ def upgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_pricebook_assignments() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_pricebook_assignments() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF NEW.archived THEN
            RETURN NEW;
@@ -41,7 +41,7 @@ def upgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_uom_conversions() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_uom_conversions() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF NEW.archived THEN
            RETURN NEW;
@@ -75,7 +75,7 @@ def upgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_product_costs() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_product_costs() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF NEW.archived THEN
            RETURN NEW;
@@ -90,7 +90,7 @@ def upgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_discount_policies() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_discount_policies() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF NEW.archived THEN
            RETURN NEW;
@@ -121,7 +121,7 @@ def downgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_pricebook_assignments() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_pricebook_assignments() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF EXISTS (SELECT 1 FROM pricebook_assignments p WHERE p.tenant_id = NEW.tenant_id
          AND p.id <> NEW.id AND p.customer_id IS NOT DISTINCT FROM NEW.customer_id
@@ -133,7 +133,7 @@ def downgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_uom_conversions() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_uom_conversions() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF EXISTS (SELECT 1 FROM uom_conversions p WHERE p.tenant_id = NEW.tenant_id
          AND p.id <> NEW.id AND p.product_id = NEW.product_id
@@ -161,7 +161,7 @@ def downgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_product_costs() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_product_costs() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF EXISTS (SELECT 1 FROM product_costs p WHERE p.tenant_id = NEW.tenant_id
          AND p.id <> NEW.id AND p.product_id = NEW.product_id
@@ -173,7 +173,7 @@ def downgrade() -> None:
         END $$
     """)
     op.execute("""
-        CREATE OR REPLACE FUNCTION qt005_overlap_discount_policies() RETURNS trigger LANGUAGE plpgsql AS $$
+        CREATE OR REPLACE FUNCTION qt005_overlap_discount_policies() RETURNS trigger\n        LANGUAGE plpgsql AS $
         BEGIN
          IF EXISTS (SELECT 1 FROM discount_policies p WHERE p.tenant_id = NEW.tenant_id
          AND p.id <> NEW.id AND p.customer_id IS NOT DISTINCT FROM NEW.customer_id
