@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from quotepilot_api.auth import AuthError, Capability, Principal
+from quotepilot_api.auth import AuthError, Principal
 from quotepilot_api.calculation_models import (
     CalculationLine,
     CalculationRequest,
@@ -81,12 +81,12 @@ def check_margin(
 
 
 class CalculationService:
-    """Trusted application API. Pass only a server-authenticated Principal for adoption.
+    """Trusted deterministic evaluator for already-adopted revision evidence.
 
-    Untrusted candidate text is deliberately absent from CalculationRequest. The caller
-    must explicitly adopt it through its authenticated edit workflow before passing a
-    NegotiatedPrice. case_id/revision bind evaluation to the caller's immutable revision;
-    QT-008 persists it and QT-020 revalidates and records approval, never this service.
+    Untrusted candidate text is deliberately absent from CalculationRequest. QT-008's
+    authenticated edit workflow must establish negotiated price, proposer, reason and
+    proposal timestamp before passing the immutable revision to this service. Recalculation
+    never rewrites that provenance; QT-020 revalidates and records approval, never here.
     """
 
     def __init__(self, sessions: sessionmaker[Session]) -> None:
@@ -140,7 +140,7 @@ class CalculationService:
                     )
                     for line in checked.lines:
                         result, issues = self._line(
-                            repo, context, line, config, book, policy, instant, actor
+                            repo, context, line, config, book, policy, instant
                         )
                         lines.append(result)
                         findings.extend(issues)
@@ -190,9 +190,9 @@ class CalculationService:
             ]:
                 if any(f.kind == kind for f in findings):
                     state = candidate
-            # Exclude only evaluation time from comparison; explicit evidence windows,
-            # settings, inputs, outcomes and relevant availability all remain material.
-            material_lines = [x.model_dump(exclude={"proposed_at"}) for x in lines]
+            # Evaluation time itself is excluded; immutable proposal provenance, explicit
+            # evidence windows, settings, inputs, outcomes and required availability remain material.
+            material_lines = [x.model_dump() for x in lines]
             for input_line, material in zip(checked.lines, material_lines, strict=False):
                 if not input_line.availability_required:
                     for key in ("inventory_state", "aggregate_available", "inventory_uom"):
@@ -239,7 +239,6 @@ class CalculationService:
         book: Mapping[Any, Any],
         policy: Mapping[Any, Any] | None,
         instant: datetime,
-        actor: Principal | None,
     ) -> tuple[LineCalculation, list[Finding]]:
         records: list[Evidence] = []
         issues: list[Finding] = []
@@ -285,19 +284,12 @@ class CalculationService:
         selected = reference
         proposal: dict[str, Any] = {}
         if line.negotiated is not None:
-            try:
-                if actor is None:
-                    raise AuthError("NEGOTIATED_ADOPTION_REQUIRED", 403)
-                actor.require(Capability.EDIT_DRAFT)
-            except AuthError:
-                issue("NEGOTIATED_ADOPTION_REQUIRED")
-                return LineCalculation(line_id=line.line_id, evidence=tuple(records)), issues
             selected = line.negotiated.unit_price
             proposal = dict(
                 negotiated_unit_price=selected,
-                proposer_id=actor.user_id,
+                proposer_id=line.negotiated.proposer_id,
                 proposal_reason=line.negotiated.reason,
-                proposed_at=instant,
+                proposed_at=line.negotiated.proposed_at,
                 absolute_unit_delta=selected - reference,
                 deviation_numerator=reference - selected if reference > 0 else None,
                 deviation_denominator=reference if reference > 0 else None,
