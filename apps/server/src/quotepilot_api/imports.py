@@ -235,9 +235,12 @@ def plan(
                     and not conflicts[0]["archived"]
                     and conflicts[0]["valid_from"] < data["valid_from"]
                     and conflicts[0]["valid_to"] is None
-                    and all(
-                        conflicts[0].get(k) == data.get(k)
-                        for k in ("quantity_min", "quantity_max", "uom")
+                    and (
+                        job.kind == "product_costs"
+                        or all(
+                            conflicts[0].get(k) == data.get(k)
+                            for k in ("quantity_min", "quantity_max", "uom")
+                        )
                     )
                 ):
                     previous = dict(conflicts[0])
