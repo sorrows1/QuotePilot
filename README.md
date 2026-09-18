@@ -144,3 +144,7 @@ Initial revision `0001_tenant_baseline` adds `tenants` and one-to-one `tenant_se
 `TenantService` owns commit/rollback. Repositories require a non-null `TenantContext`, scope reads and updates by that identity, and never commit. Provisioning is a trusted application operation with no public endpoint; QT-003 will derive context from the authenticated principal. A supplied record ID never selects the authoritative tenant. QT-004 owns the later settings API/UI and fields.
 
 Backout `node scripts/server.mjs python -m quotepilot_api.migrate downgrade base` drops both baseline tables and their data. Use it only on a disposable database for smoke testing; populated environments require an explicit backup/data-preservation plan before backout. Never change a PostgreSQL image major against an existing populated volume in place.
+
+## Authentication
+
+See [authentication operations and session contract](apps/server/AUTH.md) for trusted bootstrap, local/production origin settings, RBAC, migration/backout and browser verification. Run `npm run auth:bootstrap` after setup; run `npm run test:e2e` for the real browser gate.
