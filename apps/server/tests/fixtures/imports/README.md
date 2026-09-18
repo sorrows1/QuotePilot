@@ -1,10 +1,22 @@
 # QT-006 import fixtures
 
-These bounded, synthetic task fixtures adapt the **documented** DATA-001 scenarios
-and canonical SYN-* identifiers. They are not copies of its attachments: the Notion
-connector returned 404 when retrieving the attachment pack. DATA-001 is Done;
-the source page is https://app.notion.com/p/7bbde723e8a183f0b29201168cdbb9c4.
-The complete attachment pack has not been verified against this importer.
+These bounded, synthetic task fixtures are QT-006's schema-specific adaptation of
+the canonical DATA-001 source-fixture contract. DATA-001 explicitly defines its Notion
+page as the schema-independent contract and requires later QT-006 work to adapt those
+scenarios to the actual importer rather than freeze its source columns. The repository
+fixtures therefore consume the page's canonical SYN-* namespace, business meanings and
+acceptance checklist directly; attachment byte-for-byte identity is not an importer
+requirement.
+
+Contract mapping used here:
+- canonical customers: `SYN-CUST-100`, `SYN-CUST-200`;
+- canonical products: `SYN-SKU-VALVE-DN50-BRASS` and `SYN-SKU-TAPE-24MM`;
+- canonical book: `SYN-PB-STD-V1`;
+- exact tier boundary: brass-valve tiers meet at quantity 10;
+- product-specific UOM: tape uses the documented `BOX -> EA` factor 12 integration case;
+- inventory shortage evidence: brass-valve inventory is 8 EA;
+- explicit decimal/effective-window/reference failures are covered by integration tests,
+  while parser-specific malformed-file cases remain QT-006-owned.
 
 Import the valid CSVs in this order: customers, products, pricebooks, prices,
 inventory. Map each header to the same-named field. All rows belong to the signed-in
