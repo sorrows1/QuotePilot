@@ -7,6 +7,8 @@
   "scripts": {
     "setup": "npm run setup:db && npm run setup:deps && npm run db:migrate",
     "db:migrate": "node scripts/server.mjs python -m quotepilot_api.migrate",
+    "auth:bootstrap": "node scripts/server.mjs python -m quotepilot_api.bootstrap",
+    "test:e2e": "node scripts/server.mjs pytest tests/browser_e2e.py",
     "setup:deps": "npm --prefix apps/web ci && uv --directory apps/server sync",
     "setup:db": "node scripts/setup-db.mjs",
     "setup:ci": "npm --prefix apps/web ci && uv --directory apps/server sync --locked",

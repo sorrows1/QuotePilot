@@ -22,6 +22,8 @@ services:
       <<: *database-credentials
       DATABASE_URL: ${DATABASE_URL:-}
       DATABASE_HOST: db
+      AUTH_ORIGIN: ${AUTH_ORIGIN:-http://localhost:5173}
+      AUTH_LOCAL_HTTP: ${AUTH_LOCAL_HTTP:-1}
     depends_on:
       db:
         condition: service_healthy
@@ -34,6 +36,8 @@ services:
       retries: 10
 
   web:
+    environment:
+      API_PROXY_TARGET: http://api:8000
     build:
       context: ./apps/web
     depends_on:
