@@ -276,19 +276,28 @@ def test_negotiation_does_not_write_master_data(database: Engine) -> None:
     c = Catalog(database)
     original = price(c.p.id, c.b.id, unit_price="42")
     c.commercial.create_batch(c.context, [original])
+    sales = Principal(c.context, uuid4(), Role.SALES_ADMIN, "sales", False, uuid4(), "")
+    proposal = NegotiatedPrice(
+        unit_price=D("39.50"),
+        reason="package",
+        proposer_id=sales.user_id,
+        proposed_at=AS_OF - timedelta(minutes=1),
+    )
     c.request = c.request.model_copy(
         update={
             "lines": (
-                c.request.lines[0].model_copy(
-                    update={"negotiated": NegotiatedPrice(unit_price=D("39.50"), reason="package")}
-                ),
+                c.request.lines[0].model_copy(update={"negotiated": proposal}),
             )
         }
     )
-    sales = Principal(c.context, uuid4(), Role.SALES_ADMIN, "sales", False, uuid4(), "")
+    manager = Principal(c.context, uuid4(), Role.SALES_MANAGER, "manager", False, uuid4(), "")
     first = c.calculate(actor=sales)
-    second = c.calculate(actor=sales)
-    assert first.total == D("395.00") and second.state == "APPROVAL_REQUIRED"
+    second = c.calculate(actor=manager)
+    third = c.calculate()
+    assert first.total == D("395.00") and second.state == third.state == "APPROVAL_REQUIRED"
+    assert first.lines[0].proposer_id == second.lines[0].proposer_id == proposal.proposer_id
+    assert first.lines[0].proposed_at == second.lines[0].proposed_at == proposal.proposed_at
+    assert first.commercial_fingerprint == second.commercial_fingerprint == third.commercial_fingerprint
     with c.sessions() as session:
         stored = CommercialRepository(session).get(c.context, "prices", original.id)
         assert stored is not None and stored["unit_price"] == D("42")
