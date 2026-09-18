@@ -2,7 +2,6 @@
 
 import json
 import random
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal, Inexact, localcontext
 from typing import Any
@@ -73,6 +72,17 @@ class Harness:
                 "quantity": "1",
                 "quote_uom": "EA",
                 "pricing_uom": "EA",
+                **changes,
+            }
+        )
+
+    def negotiated(self, unit_price: str | Decimal = "39.50", reason: str = "project", **changes: Any) -> NegotiatedPrice:
+        return NegotiatedPrice(
+            **{
+                "unit_price": D(unit_price),
+                "reason": reason,
+                "proposer_id": self.actor.user_id,
+                "proposed_at": AS_OF - timedelta(minutes=1),
                 **changes,
             }
         )
@@ -243,7 +253,7 @@ def test_gq021_022_023_negotiation(h: Harness) -> None:
     h.policy("0.02")
     assert h.run(lines=(h.line(quantity="10"),)).total == D("411.60")
     line = h.line(
-        quantity="10", negotiated=NegotiatedPrice(unit_price=D("39.50"), reason="project")
+        quantity="10", negotiated=h.negotiated()
     )
     result = h.run(lines=(line,))
     calculated = result.lines[0]
@@ -257,7 +267,7 @@ def test_gq021_022_023_negotiation(h: Harness) -> None:
     assert calculated.proposer_id == h.actor.user_id
     assert codes(result) == {"NEGOTIATED_UNIT_PRICE"} and result.state == "APPROVAL_REQUIRED"
     h.repo.price.return_value["unit_price"] = D("0")
-    result = h.run(lines=(h.line(negotiated=NegotiatedPrice(unit_price=D("0"), reason="sample")),))
+    result = h.run(lines=(h.line(negotiated=h.negotiated(unit_price="0", reason="sample")),))
     assert result.total == D("0.00") and result.lines[0].deviation_denominator is None
     assert result.state == "APPROVAL_REQUIRED"
 
@@ -284,7 +294,7 @@ def test_gq024_025_independent_margins_and_all_exceptions(h: Harness) -> None:
     result = h.run(
         lines=(
             h.line(
-                quantity="300", negotiated=NegotiatedPrice(unit_price=D("39.50"), reason="package")
+                quantity="300", negotiated=h.negotiated(reason="package")
             ),
         )
     )
@@ -304,7 +314,7 @@ def test_gq026_041_product_resolution_before_proposal(h: Harness, resolution: st
             h.line(
                 product_id=None,
                 resolution=resolution,
-                negotiated=NegotiatedPrice(unit_price=D("39.50"), reason="project"),
+                negotiated=h.negotiated(),
             ),
         )
     )
@@ -332,7 +342,7 @@ def test_gq038_line_equality(h: Harness) -> None:
 def test_gq004_040_no_negotiated_fallback(h: Harness, error: str) -> None:
     h.repo.price.side_effect = CommercialError(error)
     result = h.run(
-        lines=(h.line(negotiated=NegotiatedPrice(unit_price=D("39.50"), reason="project")),)
+        lines=(h.line(negotiated=h.negotiated()),)
     )
     assert result.total is None and codes(result) == {error}
     assert result.lines[0].negotiated_unit_price is None
@@ -343,20 +353,56 @@ def test_gq004_040_no_negotiated_fallback(h: Harness, error: str) -> None:
 )
 def test_gq040_041_invalid_adoption(changes: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
-        NegotiatedPrice(**{"unit_price": "39.50", "reason": "project", **changes})
+        NegotiatedPrice(
+            **{
+                "unit_price": "39.50",
+                "reason": "project",
+                "proposer_id": uuid4(),
+                "proposed_at": AS_OF - timedelta(minutes=1),
+                **changes,
+            }
+        )
 
 
-def test_adoption_requires_sales_permission_and_tenant(h: Harness) -> None:
-    request = h.request(
-        lines=(h.line(negotiated=NegotiatedPrice(unit_price=D("1"), reason="project")),)
+@pytest.mark.parametrize("missing", ["proposer_id", "proposed_at"])
+def test_negotiated_provenance_is_required(missing: str) -> None:
+    values: dict[str, Any] = {
+        "unit_price": "39.50",
+        "reason": "project",
+        "proposer_id": uuid4(),
+        "proposed_at": AS_OF - timedelta(minutes=1),
+    }
+    values.pop(missing)
+    with pytest.raises(ValueError):
+        NegotiatedPrice(**values)
+
+
+def test_recalculation_preserves_negotiated_provenance_and_tenant(h: Harness) -> None:
+    proposal = h.negotiated(unit_price="1")
+    request = h.request(lines=(h.line(negotiated=proposal),))
+    manager = Principal(h.context, uuid4(), Role.SALES_MANAGER, "manager", False, uuid4(), "")
+    results = [
+        h.service.calculate(h.context, request, actor=None, pricing_as_of=AS_OF),
+        h.service.calculate(h.context, request, actor=h.actor, pricing_as_of=AS_OF),
+        h.service.calculate(h.context, request, actor=manager, pricing_as_of=AS_OF),
+    ]
+    assert {result.commercial_fingerprint for result in results} == {
+        results[0].commercial_fingerprint
+    }
+    assert all(result.lines[0].proposer_id == proposal.proposer_id for result in results)
+    assert all(result.lines[0].proposed_at == proposal.proposed_at for result in results)
+
+    changed_proposal = proposal.model_copy(
+        update={"proposed_at": proposal.proposed_at - timedelta(seconds=1)}
     )
-    for actor in [
-        None,
-        replace(h.actor, role=Role.SYSTEM_ADMIN),
-        replace(h.actor, must_change_password=True),
-    ]:
-        result = h.service.calculate(h.context, request, actor=actor, pricing_as_of=AS_OF)
-        assert result.total is None and codes(result) == {"NEGOTIATED_ADOPTION_REQUIRED"}
+    changed = request.model_copy(
+        update={"lines": (request.lines[0].model_copy(update={"negotiated": changed_proposal}),)}
+    )
+    assert (
+        h.service.calculate(h.context, changed, pricing_as_of=AS_OF).commercial_fingerprint
+        != results[0].commercial_fingerprint
+    )
+
     with pytest.raises(AuthError, match="TENANT_SCOPE_VIOLATION"):
         h.service.calculate(TenantContext(uuid4()), request, actor=h.actor)
 
