@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, Engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from quotepilot_api.commercial_schema import TABLES
 from quotepilot_api.database import database_engine, database_url
 from quotepilot_api.migrate import migrate
 from quotepilot_api.tenants import Tenant, TenantSettings
@@ -71,19 +72,22 @@ def test_url_preserves_encoded_credentials_and_options(monkeypatch: pytest.Monke
 
 def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
     assert inspect(empty_database).get_table_names() == []
+    expected_tables = {
+        "alembic_version",
+        "tenants",
+        "tenant_settings",
+        "tenant_logins",
+        "users",
+        "auth_sessions",
+        "business_audit_events",
+        "auth_limits",
+        "commercial_write_guards",
+        *TABLES,
+    }
     for _ in range(2):
         migrate(empty_database)
         inspector = inspect(empty_database)
-        assert set(inspector.get_table_names()) == {
-            "alembic_version",
-            "tenants",
-            "tenant_settings",
-            "tenant_logins",
-            "users",
-            "auth_sessions",
-            "business_audit_events",
-            "auth_limits",
-        }
+        assert set(inspector.get_table_names()) == expected_tables
         assert inspector.get_pk_constraint("tenants")["constrained_columns"] == ["id"]
         assert inspector.get_pk_constraint("tenant_settings")["constrained_columns"] == [
             "tenant_id"
