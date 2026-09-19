@@ -107,6 +107,41 @@ class BrowserBoundary:
         await self.app(scope, bounded_receive, protected_send)
 
 
+def quote_validation_fields(error: RequestValidationError) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for item in error.errors():
+        location = tuple(item["loc"])
+        if location and location[0] == "body":
+            location = location[1:]
+        key: str | None = None
+        message: str | None = None
+        if location == ("freight",):
+            key = "freight"
+            message = "Enter a nonnegative amount with at most two decimal places."
+        elif (
+            len(location) >= 3
+            and location[0] == "lines"
+            and isinstance(location[1], int)
+        ):
+            index = location[1]
+            suffix = location[2:]
+            if suffix == ("quantity",):
+                key = f"lines[{index}].quantity"
+                message = "Enter a positive decimal quantity."
+            elif suffix == ("quote_uom",):
+                key = f"lines[{index}].quote_uom"
+                message = "Enter an uppercase UOM such as EA."
+            elif suffix == ("negotiated", "unit_price"):
+                key = f"lines[{index}].negotiated.unit_price"
+                message = "Enter a nonnegative decimal price."
+            elif suffix == ("negotiated", "reason"):
+                key = f"lines[{index}].negotiated.reason"
+                message = "Enter a proposal reason of 1–1000 characters."
+        if key is not None and message is not None:
+            fields.setdefault(key, message)
+    return fields
+
+
 def install_errors(app: FastAPI) -> None:
     from quotepilot_api.quotes import QuoteError
 
@@ -114,7 +149,7 @@ def install_errors(app: FastAPI) -> None:
     async def quote_error(request: Request, error: QuoteError) -> JSONResponse:
         return JSONResponse(
             {
-                "code": "QUOTE_CONFLICT" if error.status == 409 else "QUOTE_INVALID",
+                "code": error.code,
                 "message": error.message,
             },
             status_code=error.status,
@@ -153,11 +188,8 @@ def install_errors(app: FastAPI) -> None:
             return JSONResponse(
                 {
                     "code": "QUOTE_INVALID",
-                    "message": "Check quote fields: quantities must be positive; "
-                    "UOMs use uppercase "
-                    "letters; prices use at most six decimal places and freight at most two. "
-                    "Negotiated prices require a reason. "
-                    "Select a customer and at least one product.",
+                    "message": "Correct the highlighted quote fields, then try again.",
+                    "fields": quote_validation_fields(error),
                 },
                 status_code=422,
             )

@@ -301,6 +301,32 @@ def test_http_input_authority_and_decimal_boundary(
             assert distinct_customer.status_code == 201
             assert distinct_customer.json()["id"] != str(c.customer.id)
             assert distinct_customer.json()["name"] == c.customer.name
+            with c.sessions.begin() as session:
+                session.execute(
+                    update(customers)
+                    .where(customers.c.id == UUID(distinct_customer.json()["id"]))
+                    .values(archived=True)
+                )
+            customer_conflict = client.post(
+                "/api/customers",
+                json={
+                    "request_key": "customer-archived",
+                    "external_key": "QT-CUST-DISTINCT",
+                    "name": "Must not revive archived key",
+                },
+            )
+            assert customer_conflict.status_code == 409
+            assert customer_conflict.json()["code"] == "CUSTOMER_EXTERNAL_KEY_CONFLICT"
+            idempotency_conflict = client.post(
+                "/api/customers",
+                json={
+                    "request_key": "customer-existing",
+                    "external_key": "QT-CUST-OTHER",
+                    "name": "Different payload",
+                },
+            )
+            assert idempotency_conflict.status_code == 409
+            assert idempotency_conflict.json()["code"] == "QUOTE_IDEMPOTENCY_CONFLICT"
             missing_customer = client.post("/api/quotes", json={"request_key": "missing-customer"})
             assert missing_customer.status_code == 422
             created = client.post(
@@ -356,16 +382,36 @@ def test_http_input_authority_and_decimal_boundary(
             bad["lines"][0]["quantity"] = 2.0
             invalid = client.post(route, json=bad)
             assert invalid.status_code == 422
-            assert "quantities must be positive" in invalid.json()["message"]
+            assert invalid.json()["code"] == "QUOTE_INVALID"
+            assert invalid.json()["fields"] == {
+                "lines[0].quantity": "Enter a positive decimal quantity."
+            }
             assert "password" not in invalid.json()["message"]
             assert "detail" not in invalid.json()
-            assert client.post(route, json={**payload, "freight": "1.001"}).status_code == 422
+            bad_freight = client.post(route, json={**payload, "freight": "1.001"})
+            assert bad_freight.status_code == 422
+            assert bad_freight.json()["fields"] == {
+                "freight": "Enter a nonnegative amount with at most two decimal places."
+            }
+            bad_reason = json.loads(json.dumps(payload))
+            bad_reason["lines"][0]["negotiated"]["reason"] = ""
+            invalid_reason = client.post(route, json=bad_reason)
+            assert invalid_reason.status_code == 422
+            assert invalid_reason.json()["fields"] == {
+                "lines[0].negotiated.reason": "Enter a proposal reason of 1–1000 characters."
+            }
             bad = json.loads(json.dumps(payload))
             bad["lines"][0]["negotiated"]["proposer_id"] = str(uuid4())
             assert client.post(route, json=bad).status_code == 422
             result = client.post(route, json=payload)
             assert result.status_code == 201, result.text
             assert client.post(route, json=payload).json() == result.json()
+            stale = client.post(
+                route,
+                json={**body, "expected_version": 0, "request_key": "stale-version"},
+            )
+            assert stale.status_code == 409
+            assert stale.json()["code"] == "QUOTE_VERSION_CONFLICT"
             assert (
                 client.get(f"/api/quotes/{case_id}").json()["revisions"][0]
                 == result.json()["revision"]

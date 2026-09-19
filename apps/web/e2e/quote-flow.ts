@@ -37,9 +37,33 @@ export async function quoteFlow(admin: Page, sales: Page, info: TestInfo) {
   await sales.getByLabel('Propose negotiated unit price', { exact: true }).check()
   await sales.getByLabel('Proposed unit price', { exact: true }).fill('9.50')
   await sales.getByLabel('Proposal reason', { exact: true }).fill('Package concession')
+  await sales.route('**/api/customers', async (route) => {
+    await route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'CUSTOMER_EXTERNAL_KEY_CONFLICT',
+        message: 'Customer external key is reserved by an archived customer.',
+      }),
+    })
+  }, { times: 1 })
+  await sales.getByLabel('External customer key', { exact: true }).fill('ARCHIVED-CUSTOMER')
+  await sales.getByLabel('Customer name', { exact: true }).fill('Archived customer')
+  await sales.getByRole('button', { name: 'Create and select customer', exact: true }).click()
+  await expect(sales.getByRole('alert')).toContainText('reserved by an archived customer')
+  await expect(sales.getByText('Concurrent edit conflict', { exact: true })).toHaveCount(0)
+  await expect(sales.getByRole('button', { name: 'Reload latest (replaces local edits)' })).toHaveCount(0)
+  await expect(sales.getByLabel('Quantity', { exact: true })).toBeEnabled()
+  await expect(sales.getByLabel('Quantity', { exact: true })).toHaveValue('2')
   await sales.getByLabel('Freight (SGD)', { exact: true }).fill('1.001')
   await sales.getByRole('button', { name: 'Calculate', exact: true }).click()
-  await expect(sales.getByRole('alert')).toContainText('freight at most two')
+  await expect(sales.getByRole('alert')).toContainText('Correct the highlighted quote fields')
+  await expect(sales.getByText(
+    'Enter a nonnegative amount with at most two decimal places.',
+    { exact: true },
+  )).toBeVisible()
+  await expect(sales.getByLabel('Freight (SGD)', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await expect(sales.getByLabel('Freight (SGD)', { exact: true })).toBeFocused()
   await expect(sales.getByLabel('Quantity', { exact: true })).toHaveValue('2')
   await expect(sales.getByLabel('Proposed unit price', { exact: true })).toHaveValue('9.50')
   await sales.getByLabel('Freight (SGD)', { exact: true }).fill('0.00')

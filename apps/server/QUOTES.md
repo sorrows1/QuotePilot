@@ -14,7 +14,10 @@ Draft listing returns the newest 50 cases. All browser writes use the existing o
 request-header and CSRF boundary. Quote calculate/revision POST bodies have an explicit
 16 MiB transport limit so valid multi-line payloads allowed by the 1000-line DTO are
 not rejected by the generic 4 KiB browser boundary; small quote-creation requests keep
-the normal boundary.
+the normal boundary. Optimistic edit conflicts use `QUOTE_VERSION_CONFLICT`; other
+409 outcomes remain recoverable action errors. Quote validation responses expose only
+allow-listed field paths/messages so the UI can attach persistent inline errors without
+echoing rejected values.
 
 ## Persistence and authority
 

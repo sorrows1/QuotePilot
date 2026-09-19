@@ -27,8 +27,10 @@ from quotepilot_api.settings import current, setup_complete
 
 
 class QuoteError(Exception):
-    def __init__(self, message: str, status: int = 422):
-        self.message, self.status = message, status
+    def __init__(self, message: str, status: int = 422, code: str | None = None):
+        self.message = message
+        self.status = status
+        self.code = code or ("QUOTE_CONFLICT" if status == 409 else "QUOTE_INVALID")
         super().__init__(message)
 
 
@@ -151,7 +153,11 @@ def retry(
         .one_or_none()
     )
     if row is not None and row["payload_hash"] != fingerprint:
-        raise QuoteError("This retry key was already used for a different request.", 409)
+        raise QuoteError(
+            "This retry key was already used for a different request.",
+            409,
+            "QUOTE_IDEMPOTENCY_CONFLICT",
+        )
     return fingerprint, row["response"] if row is not None else None
 
 
@@ -306,7 +312,11 @@ def create_customer(session: Session, principal: Principal, body: CustomerCreate
     )
     if existing is not None:
         if existing["archived"]:
-            raise QuoteError("Customer external key is reserved by an archived customer.", 409)
+            raise QuoteError(
+                "Customer external key is reserved by an archived customer.",
+                409,
+                "CUSTOMER_EXTERNAL_KEY_CONFLICT",
+            )
         return receipt(
             session,
             principal,
@@ -428,7 +438,9 @@ def save(
         return dict(previous)
     if case["version"] != body.expected_version:
         raise QuoteError(
-            "Draft changed elsewhere. Reload the latest revision and reconcile your edits.", 409
+            "Draft changed elsewhere. Reload the latest revision and reconcile your edits.",
+            409,
+            "QUOTE_VERSION_CONFLICT",
         )
     request, result = evaluate(session, sessions, principal, case, case["version"] + 1, body)
     revision_id, timestamp = uuid4(), datetime.now(UTC)

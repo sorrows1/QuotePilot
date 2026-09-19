@@ -31,6 +31,18 @@ type Case = { id: string; customer_id: string; version: number; created_at: stri
 const empty: Candidate = { lines: [], freight: '0.00' }
 const readable = (text: string) => text.replaceAll('_', ' ').toLowerCase()
 
+function validationFieldId(path: string) {
+  if (path === 'freight') return 'freight'
+  const match = /^lines\[(\d+)\]\.(quantity|quote_uom|negotiated\.unit_price|negotiated\.reason)$/.exec(path)
+  if (!match) return null
+  const index = match[1]
+  const suffix = match[2]
+  if (suffix === 'quantity') return `qty-${index}`
+  if (suffix === 'quote_uom') return `uom-${index}`
+  if (suffix === 'negotiated.unit_price') return `proposal-${index}`
+  return `reason-${index}`
+}
+
 function capturedName(evidence: Result['evidence'], kind: string) {
   const record = evidence.find((item) => item.kind === kind)
   if (!record) return 'Unavailable'
@@ -62,6 +74,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [conflict, setConflict] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [productSearch, setProductSearch] = useState('')
@@ -70,6 +83,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   const [selectedCustomer, setSelectedCustomer] = useState('')
   const [product, setProduct] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
+  const errorSummary = useRef<HTMLDivElement>(null)
   const retry = useRef<{ signature: string; key: string } | null>(null)
 
   async function mutate<T>(path: string, payload: object): Promise<T> {
@@ -81,10 +95,18 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   }
 
   async function run(action: () => Promise<void>) {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setFieldErrors({})
     try { await action() } catch (caught) {
+      const apiError = caught instanceof ApiError ? caught : null
+      const fields = apiError?.code === 'QUOTE_INVALID' ? apiError.fields : {}
       setError(caught instanceof Error ? caught.message : 'Service unavailable. Try again.')
-      if (caught instanceof ApiError && caught.status === 409) setConflict(true)
+      setFieldErrors(fields)
+      if (apiError?.code === 'QUOTE_VERSION_CONFLICT') setConflict(true)
+      requestAnimationFrame(() => {
+        const first = Object.keys(fields)[0]
+        const id = first ? validationFieldId(first) : null
+        ;(id ? document.getElementById(id) : errorSummary.current)?.focus()
+      })
     } finally { setBusy(false) }
   }
 
@@ -100,7 +122,8 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   function display(next: Case) {
     const latest = next.revisions[0] ?? null
     setDraft(next); setSelectedCustomer(next.customer_id); setCandidate(latest ? editable(latest.inputs) : empty)
-    setSaved(latest); setResult(latest?.result ?? null); setDirty(false); setConflict(false); setPreview(false)
+    setSaved(latest); setResult(latest?.result ?? null); setDirty(false); setFieldErrors({})
+    setConflict(false); setPreview(false)
     requestAnimationFrame(() => heading.current?.focus())
   }
 
@@ -145,8 +168,9 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
       <h2 id="quote-title" tabIndex={-1} ref={heading}>Manual quote workspace</h2>
       <p>Prepare a draft from current commercial records. Every save captures a new revision.</p>
     </div>
-    {error ? <StatePanel kind="error" title={conflict ? 'Concurrent edit conflict' : 'Action needed'} message={error}
-      action={conflict && draft ? <Button variant="secondary" disabled={busy} onClick={() => void run(async () => display(await api<Case>(`/api/quotes/${draft.id}`)))}>Reload latest (replaces local edits)</Button> : undefined} /> : null}
+    {error ? <div ref={errorSummary} tabIndex={-1}><StatePanel kind="error"
+      title={conflict ? 'Concurrent edit conflict' : 'Action needed'} message={error}
+      action={conflict && draft ? <Button variant="secondary" disabled={busy} onClick={() => void run(async () => display(await api<Case>(`/api/quotes/${draft.id}`)))}>Reload latest (replaces local edits)</Button> : undefined} /></div> : null}
     <fieldset disabled={busy}>
       <legend>Draft cases</legend>
       <TextField id="customer-search" name="customer-search" label="Find customer" value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
@@ -211,18 +235,29 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
           {candidate.lines.map((line, index) => <section className="quote-line" key={line.line_id} aria-label={`Line ${index + 1}`}>
             <h3>Line {index + 1} · {products.find((p) => p.id === line.product_id)?.name ?? line.product_id}</h3>
             <div className="quote-fields">
-              <TextField id={`qty-${index}`} name={`qty-${index}`} label="Quantity" inputMode="decimal" required value={line.quantity} onChange={(e) => changeLine(index, { quantity: e.target.value })} />
-              <TextField id={`uom-${index}`} name={`uom-${index}`} label="Quote UOM" required pattern="[A-Z][A-Z0-9_]*" maxLength={30} value={line.quote_uom} onChange={(e) => changeLine(index, { quote_uom: e.target.value })} />
+              <TextField id={`qty-${index}`} name={`qty-${index}`} label="Quantity" inputMode="decimal" required
+                error={fieldErrors[`lines[${index}].quantity`]} value={line.quantity}
+                onChange={(e) => changeLine(index, { quantity: e.target.value })} />
+              <TextField id={`uom-${index}`} name={`uom-${index}`} label="Quote UOM" required
+                pattern="[A-Z][A-Z0-9_]*" maxLength={30} error={fieldErrors[`lines[${index}].quote_uom`]}
+                value={line.quote_uom} onChange={(e) => changeLine(index, { quote_uom: e.target.value })} />
             </div>
             <p>Pricing UOM and commercial authority are resolved by the server from the selected product and current pricebook.</p>
             <label><input type="checkbox" checked={!!line.negotiated} onChange={(e) => changeLine(index, { negotiated: e.target.checked ? { unit_price: '', reason: '' } : null })} /> Propose negotiated unit price</label>
             {line.negotiated ? <div className="quote-fields">
-              <TextField id={`proposal-${index}`} name={`proposal-${index}`} label="Proposed unit price" help="Provisional proposal; normal pricebook authority remains unchanged." required inputMode="decimal" value={line.negotiated.unit_price} onChange={(e) => changeLine(index, { negotiated: { ...line.negotiated!, unit_price: e.target.value } })} />
-              <TextField id={`reason-${index}`} name={`reason-${index}`} label="Proposal reason" required maxLength={1000} value={line.negotiated.reason} onChange={(e) => changeLine(index, { negotiated: { ...line.negotiated!, reason: e.target.value } })} />
+              <TextField id={`proposal-${index}`} name={`proposal-${index}`} label="Proposed unit price"
+                help="Provisional proposal; normal pricebook authority remains unchanged." required inputMode="decimal"
+                error={fieldErrors[`lines[${index}].negotiated.unit_price`]} value={line.negotiated.unit_price}
+                onChange={(e) => changeLine(index, { negotiated: { ...line.negotiated!, unit_price: e.target.value } })} />
+              <TextField id={`reason-${index}`} name={`reason-${index}`} label="Proposal reason" required
+                maxLength={1000} error={fieldErrors[`lines[${index}].negotiated.reason`]} value={line.negotiated.reason}
+                onChange={(e) => changeLine(index, { negotiated: { ...line.negotiated!, reason: e.target.value } })} />
             </div> : null}
             <Button type="button" variant="secondary" onClick={() => edit({ ...candidate, lines: candidate.lines.filter((_, i) => i !== index) })}>Remove line {index + 1}</Button>
           </section>)}
-          <TextField id="freight" name="freight" label="Freight (SGD)" inputMode="decimal" required value={candidate.freight} onChange={(e) => edit({ ...candidate, freight: e.target.value })} />
+          <TextField id="freight" name="freight" label="Freight (SGD)" inputMode="decimal" required
+            error={fieldErrors.freight} value={candidate.freight}
+            onChange={(e) => edit({ ...candidate, freight: e.target.value })} />
           <div className="quote-summary">
             <h3>Draft summary</h3>
             {result ? <ResultView result={result} inputs={candidate} /> : <p>Add at least one line, then calculate current prices and stock context.</p>}
