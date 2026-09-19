@@ -125,7 +125,13 @@ def test_exact_snapshot_retry_history_settings_and_numbering(database: Engine) -
         session.execute(update(schema.lines).values(quantity=1))
     with c.sessions.begin() as session:
         replacement = quotes.create_customer(
-            session, actor, CustomerCreate(request_key="replacement-customer", name="Replacement")
+            session,
+            actor,
+            CustomerCreate(
+                request_key="replacement-customer",
+                external_key="QT-CUST-REPLACEMENT",
+                name="Replacement",
+            ),
         )
     with pytest.raises(IntegrityError), c.sessions.begin() as session:
         session.execute(
@@ -167,12 +173,16 @@ def test_conflicting_retries_and_concurrent_edits(database: Engine) -> None:
             QuoteCreate(request_key="create", customer_id=c.customer.id),
         )["id"] == str(case_id)
         customer = quotes.create_customer(
-            session, actor, CustomerCreate(request_key="customer", name="New")
+            session,
+            actor,
+            CustomerCreate(request_key="customer", external_key="QT-CUST-NEW", name="New"),
         )
     with c.sessions.begin() as session:
         assert (
             quotes.create_customer(
-                session, actor, CustomerCreate(request_key="customer", name="New")
+                session,
+                actor,
+                CustomerCreate(request_key="customer", external_key="QT-CUST-NEW", name="New"),
             )
             == customer
         )
@@ -231,6 +241,34 @@ def test_http_input_authority_and_decimal_boundary(
             },
         ) as client:
             client.cookies.set("quotepilot_dev", token)
+            assert client.post(
+                "/api/customers", json={"request_key": "customer-no-key", "name": "Missing key"}
+            ).status_code == 422
+            existing_customer = client.post(
+                "/api/customers",
+                json={
+                    "request_key": "customer-existing",
+                    "external_key": c.customer.external_key,
+                    "name": "Name must not overwrite imported authority",
+                },
+            )
+            assert existing_customer.status_code == 201
+            assert existing_customer.json() == {
+                "id": str(c.customer.id),
+                "external_key": c.customer.external_key,
+                "name": c.customer.name,
+            }
+            distinct_customer = client.post(
+                "/api/customers",
+                json={
+                    "request_key": "customer-distinct",
+                    "external_key": "QT-CUST-DISTINCT",
+                    "name": c.customer.name,
+                },
+            )
+            assert distinct_customer.status_code == 201
+            assert distinct_customer.json()["id"] != str(c.customer.id)
+            assert distinct_customer.json()["name"] == c.customer.name
             assert client.post("/api/quotes", json={"request_key": "missing-customer"}).status_code == 422
             created = client.post(
                 "/api/quotes",
@@ -238,6 +276,31 @@ def test_http_input_authority_and_decimal_boundary(
             )
             assert created.status_code == 201, created.text
             assert created.json()["customer_id"] == str(c.customer.id)
+
+            large_lines = []
+            for index in range(24):
+                line = json.loads(json.dumps(body["lines"][0]))
+                line["line_id"] = f"LARGE-{index}"
+                line["negotiated"]["reason"] = "valid negotiated quote reason " * 12
+                large_lines.append(line)
+            large_candidate = {"freight": "0.00", "lines": large_lines}
+            assert len(json.dumps(large_candidate).encode()) > 4096
+            large_case_id = created.json()["id"]
+            large_calculation = client.post(
+                f"/api/quotes/{large_case_id}/calculate", json=large_candidate
+            )
+            assert large_calculation.status_code == 200, large_calculation.text
+            large_save = {
+                **large_candidate,
+                "expected_version": 0,
+                "request_key": "large-valid-quote",
+            }
+            assert len(json.dumps(large_save).encode()) > 4096
+            large_revision = client.post(
+                f"/api/quotes/{large_case_id}/revisions", json=large_save
+            )
+            assert large_revision.status_code == 201, large_revision.text
+
             route = f"/api/quotes/{case_id}/revisions"
             payload = {**body, "expected_version": 0, "request_key": "http"}
             for field in [

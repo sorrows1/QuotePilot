@@ -36,6 +36,7 @@ Nonnegative = Annotated[Exact, Field(ge=0)]
 Positive = Annotated[Exact, Field(gt=0)]
 Rate = Annotated[Exact, Field(ge=0, le=1)]
 Text = Annotated[str, Field(min_length=1, max_length=1000)]
+ExternalKey = Annotated[str, Field(min_length=1, max_length=100)]
 Uom = Annotated[str, Field(min_length=1, max_length=30, pattern=r"^[A-Z][A-Z0-9_]*$")]
 
 
@@ -52,7 +53,7 @@ class RecordInput(BaseModel):
 
 
 class CustomerInput(RecordInput):
-    external_key: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    external_key: ExternalKey | None = None
     name: Annotated[str, Field(min_length=1, max_length=255)]
 
 

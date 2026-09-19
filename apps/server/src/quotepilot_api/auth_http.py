@@ -13,6 +13,8 @@ from quotepilot_api.auth_api import auth_config
 from quotepilot_api.import_parser import ImportError
 from quotepilot_api.settings import SettingsError, SettingsInput
 
+QUOTE_BODY_LIMIT = 16 * 1024 * 1024
+
 MESSAGES = {
     "LAST_ADMIN_REQUIRED": "Keep at least one enabled system administrator for this organization.",
     "AUTH_INVALID_CREDENTIALS": "Unable to sign in. Check your credentials or sign in again.",
@@ -66,7 +68,9 @@ class BrowserBoundary:
                 return
             body.extend(message.get("body", b""))
             limit = (
-                2800000
+                QUOTE_BODY_LIMIT
+                if scope["path"].startswith("/api/quotes") and request.method == "POST"
+                else 2800000
                 if scope["path"] == "/api/admin/imports" and request.method == "POST"
                 else 16384
                 if scope["path"].startswith("/api/admin/imports/")
@@ -154,7 +158,11 @@ def install_errors(app: FastAPI) -> None:
             )
         if request.url.path == "/api/customers":
             return JSONResponse(
-                {"code": "QUOTE_INVALID", "message": "Enter a customer name of 1–255 characters."},
+                {
+                    "code": "QUOTE_INVALID",
+                    "message": "Enter an external customer key of 1–100 characters "
+                    "and a customer name of 1–255 characters.",
+                },
                 status_code=422,
             )
         if request.url.path.startswith("/api/admin/settings"):

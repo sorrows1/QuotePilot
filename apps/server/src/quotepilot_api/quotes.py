@@ -254,7 +254,9 @@ def lookup(session: Session, principal: Principal, kind: str, query: str) -> lis
     authorize(session, principal)
     table = commercial.customers if kind == "customers" else commercial.products
     conditions = [table.c.name.icontains(query, autoescape=True), table.c.id.cast(String) == query]
-    if kind == "products":
+    if kind == "customers":
+        conditions.append(table.c.external_key.icontains(query, autoescape=True))
+    else:
         conditions.append(table.c.sku.icontains(query, autoescape=True))
     rows = session.execute(
         select(table)
@@ -267,7 +269,15 @@ def lookup(session: Session, principal: Principal, kind: str, query: str) -> lis
         .limit(50)
     ).mappings()
     return [
-        {"id": str(r["id"]), "name": r["name"], **({"sku": r["sku"]} if kind == "products" else {})}
+        {
+            "id": str(r["id"]),
+            "name": r["name"],
+            **(
+                {"sku": r["sku"]}
+                if kind == "products"
+                else {"external_key": r["external_key"]}
+            ),
+        }
         for r in rows
     ]
 
@@ -277,17 +287,50 @@ def create_customer(session: Session, principal: Principal, body: CustomerCreate
     fingerprint, previous = retry(session, principal, body, "create_customer")
     if previous is not None:
         return dict(previous)
+
+    existing = (
+        session.execute(
+            select(commercial.customers)
+            .where(
+                scope(commercial.customers, principal),
+                commercial.customers.c.external_key == body.external_key,
+            )
+            .with_for_update()
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if existing is not None:
+        if existing["archived"]:
+            raise QuoteError("Customer external key is reserved by an archived customer.", 409)
+        return receipt(
+            session,
+            principal,
+            body,
+            fingerprint,
+            {
+                "id": str(existing["id"]),
+                "external_key": existing["external_key"],
+                "name": existing["name"],
+            },
+        )
+
     customer_id = uuid4()
     session.execute(
         insert(commercial.customers).values(
             tenant_id=principal.context.tenant_id,
             id=customer_id,
+            external_key=body.external_key,
             name=body.name,
         )
     )
     audit(session, principal.context, principal.user_id, "quote_customer_created", customer_id)
     return receipt(
-        session, principal, body, fingerprint, {"id": str(customer_id), "name": body.name}
+        session,
+        principal,
+        body,
+        fingerprint,
+        {"id": str(customer_id), "external_key": body.external_key, "name": body.name},
     )
 
 

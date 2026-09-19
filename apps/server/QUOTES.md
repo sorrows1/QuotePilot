@@ -5,9 +5,15 @@ edit and preview provisional quotes after company setup. System Administrators r
 their existing setup/import/user workflows and cannot edit quotes.
 
 The browser uses `/api/quotes`, `/api/quotes/{id}`, `/calculate`, `/revisions`,
-`/api/customers`, and `/api/products`. Lookup is tenant-scoped, literal SKU/name/UUID
-matching with at most 50 results. Draft listing returns the newest 50 cases.
-All browser writes use the existing origin, request-header and CSRF boundary.
+`/api/customers`, and `/api/products`. Lookup is tenant-scoped, including customer
+external key/name/UUID and product SKU/name/UUID matching, with at most 50 results.
+Interactive customer creation requires the same non-empty tenant-scoped `external_key`
+namespace used by QT-006 import. Reusing an active key returns that authoritative
+customer without changing its name; name equality alone never merges customers.
+Draft listing returns the newest 50 cases. All browser writes use the existing origin,
+request-header and CSRF boundary. Quote POST bodies have an explicit 16 MiB transport
+limit so valid multi-line payloads allowed by the 1000-line DTO are not rejected by
+the generic 4 KiB browser boundary.
 
 ## Persistence and authority
 

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from quotepilot_api.commercial_inputs import Nonnegative, Positive, Uom
+from quotepilot_api.commercial_inputs import ExternalKey, Nonnegative, Positive, Uom
 
 
 class Input(BaseModel):
@@ -29,6 +29,7 @@ class QuoteCreate(RetryInput):
 
 
 class CustomerCreate(RetryInput):
+    external_key: ExternalKey
     name: str = Field(min_length=1, max_length=255)
 
 

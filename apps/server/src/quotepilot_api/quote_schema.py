@@ -1,6 +1,7 @@
 """Tenant-scoped case coordination and immutable commercial evidence."""
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -25,6 +26,7 @@ cases = Table(
     Column("creator_id", Uuid, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("version", Integer, nullable=False),
+    CheckConstraint("version >= 0"),
     UniqueConstraint("tenant_id", "id", "customer_id"),
     ForeignKeyConstraint(["tenant_id", "customer_id"], ["customers.tenant_id", "customers.id"]),
     ForeignKeyConstraint(["tenant_id", "creator_id"], ["users.tenant_id", "users.id"]),
@@ -48,6 +50,10 @@ revisions = Table(
     Column("snapshot", JSONB, nullable=False),
     Column("inputs", JSONB, nullable=False),
     Column("exception_set", JSONB, nullable=False),
+    CheckConstraint("revision > 0"),
+    CheckConstraint(
+        "state IN ('CALCULATED','HARD_BLOCK','CLARIFICATION_REQUIRED','APPROVAL_REQUIRED')"
+    ),
     UniqueConstraint("tenant_id", "case_id", "revision"),
     ForeignKeyConstraint(
         ["tenant_id", "case_id", "customer_id"],
@@ -70,6 +76,8 @@ lines = Table(
     Column("quote_uom", String(30), nullable=False),
     Column("pricing_uom", String(30), nullable=False),
     Column("negotiated_unit_price", Numeric),
+    CheckConstraint("quantity > 0"),
+    CheckConstraint("negotiated_unit_price >= 0"),
     ForeignKeyConstraint(
         ["tenant_id", "revision_id"], ["quote_revisions.tenant_id", "quote_revisions.id"]
     ),

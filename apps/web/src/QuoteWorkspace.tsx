@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from './api'
 import { Button, SelectField, StatePanel, StatusBadge, TextField } from './ui'
 
-type Choice = { id: string; name: string; sku?: string }
+type Choice = { id: string; name: string; sku?: string; external_key?: string | null }
 type Line = {
   line_id: string; product_id: string; quantity: string; quote_uom: string
   negotiated: { unit_price: string; reason: string } | null
@@ -66,6 +66,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   const [customerSearch, setCustomerSearch] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [newCustomer, setNewCustomer] = useState('')
+  const [newCustomerKey, setNewCustomerKey] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState('')
   const [product, setProduct] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
@@ -154,13 +155,15 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
         onChange={(e) => setSelectedCustomer(e.target.value)}>
         <option value="">Select customer</option>
         {selectedCustomer && !customers.some((c) => c.id === selectedCustomer) ? <option value={selectedCustomer}>Saved customer {selectedCustomer}</option> : null}
-        {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        {customers.map((c) => <option key={c.id} value={c.id}>{c.external_key ? `${c.external_key} · ` : ''}{c.name}</option>)}
       </SelectField>
       <details><summary>Create customer</summary>
+        <TextField id="new-customer-key" name="new-customer-key" label="External customer key" maxLength={100} value={newCustomerKey} onChange={(e) => setNewCustomerKey(e.target.value)} />
         <TextField id="new-customer" name="new-customer" label="Customer name" maxLength={255} value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} />
-        <Button variant="secondary" disabled={!newCustomer.trim()} onClick={() => void run(async () => {
-          const created = await mutate<Choice>('/api/customers', { name: newCustomer })
-          setCustomers([...customers, created]); setSelectedCustomer(created.id); setNewCustomer('')
+        <Button variant="secondary" disabled={!newCustomerKey.trim() || !newCustomer.trim()} onClick={() => void run(async () => {
+          const created = await mutate<Choice>('/api/customers', { external_key: newCustomerKey, name: newCustomer })
+          setCustomers((current) => [...current.filter((customer) => customer.id !== created.id), created])
+          setSelectedCustomer(created.id); setNewCustomerKey(''); setNewCustomer('')
         })}>Create and select customer</Button>
       </details>
       <div className="actions">
