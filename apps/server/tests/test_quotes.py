@@ -22,7 +22,7 @@ from quotepilot_api.auth_api import auth_service
 from quotepilot_api.auth_models import BusinessAuditEvent
 from quotepilot_api.commercial_schema import prices, products
 from quotepilot_api.main import app
-from quotepilot_api.quote_contract import Candidate, CustomerCreate, RetryInput, SaveInput
+from quotepilot_api.quote_contract import Candidate, CustomerCreate, QuoteCreate, SaveInput
 from quotepilot_api.settings_models import QuoteNumber, QuoteNumberCounter
 from quotepilot_api.tenants import TenantSettings
 
@@ -34,9 +34,12 @@ def fixture(database: Engine) -> tuple[Catalog, Any, UUID, dict[str, Any]]:
     )
     actor = replace(catalog.admin, role=Role.SALES_ADMIN)
     with catalog.sessions.begin() as session:
-        case = quotes.create_case(session, actor, RetryInput(request_key="create"))
+        case = quotes.create_case(
+            session,
+            actor,
+            QuoteCreate(request_key="create", customer_id=catalog.customer.id),
+        )
     body = {
-        "customer_id": str(catalog.customer.id),
         "freight": "1.00",
         "lines": [
             {
@@ -44,7 +47,6 @@ def fixture(database: Engine) -> tuple[Catalog, Any, UUID, dict[str, Any]]:
                 "product_id": str(catalog.p.id),
                 "quantity": "2",
                 "quote_uom": "EA",
-                "pricing_uom": "EA",
                 "negotiated": {"unit_price": "9.50", "reason": "Package concession"},
             }
         ],
@@ -86,6 +88,10 @@ def test_exact_snapshot_retry_history_settings_and_numbering(database: Engine) -
     assert result["lines"][0]["negotiated_unit_price"] == "9.50"
     assert result["lines"][0]["proposer_id"] == str(actor.user_id)
     assert result["lines"][0]["proposed_at"]
+    assert revision["inputs"]["customer_id"] == str(c.customer.id)
+    assert revision["inputs"]["lines"][0]["pricing_uom"] == "EA"
+    assert revision["inputs"]["lines"][0]["availability_required"] is False
+    assert revision["inputs"]["lines"][0]["substitute_for"] is None
     approvals = [f for f in result["findings"] if f["kind"] == "approval"]
     members = revision["exception_set"]["members"]
     assert [(m["code"], m["line_id"]) for m in members] == [
@@ -117,6 +123,16 @@ def test_exact_snapshot_retry_history_settings_and_numbering(database: Engine) -
         session.execute(update(schema.revisions).values(state="CALCULATED"))
     with pytest.raises(IntegrityError), c.sessions.begin() as session:
         session.execute(update(schema.lines).values(quantity=1))
+    with c.sessions.begin() as session:
+        replacement = quotes.create_customer(
+            session, actor, CustomerCreate(request_key="replacement-customer", name="Replacement")
+        )
+    with pytest.raises(IntegrityError), c.sessions.begin() as session:
+        session.execute(
+            update(schema.cases)
+            .where(schema.cases.c.id == case_id)
+            .values(customer_id=UUID(replacement["id"]))
+        )
     c.commercial.create_batch(c.context, [])
     with c.sessions.begin() as session:
         session.execute(update(products).where(products.c.id == c.p.id).values(archived=True))
@@ -145,9 +161,11 @@ def test_conflicting_retries_and_concurrent_edits(database: Engine) -> None:
     with pytest.raises(quotes.QuoteError, match="retry key"):
         save(c, actor, case_id, body, key=successful)
     with c.sessions.begin() as session:
-        assert quotes.create_case(session, actor, RetryInput(request_key="create"))["id"] == str(
-            case_id
-        )
+        assert quotes.create_case(
+            session,
+            actor,
+            QuoteCreate(request_key="create", customer_id=c.customer.id),
+        )["id"] == str(case_id)
         customer = quotes.create_customer(
             session, actor, CustomerCreate(request_key="customer", name="New")
         )
@@ -167,11 +185,13 @@ def test_tenant_role_and_reference_boundaries(database: Engine) -> None:
         quotes.read_case(session, c.admin, case_id)
     with pytest.raises(quotes.QuoteError, match="unavailable"), c.sessions.begin() as session:
         quotes.read_case(session, actor, foreign_case)
-    for bad in [
-        foreign_body,
-        {**body, "customer_id": str(uuid4())},
-        {**body, "lines": foreign_body["lines"]},
-    ]:
+    with pytest.raises(quotes.QuoteError, match="unavailable"), c.sessions.begin() as session:
+        quotes.create_case(
+            session,
+            actor,
+            QuoteCreate(request_key="foreign-customer", customer_id=other.customer.id),
+        )
+    for bad in [foreign_body, {**body, "lines": foreign_body["lines"]}]:
         with pytest.raises(quotes.QuoteError, match="unavailable"):
             save(c, actor, case_id, bad)
     manager = replace(actor, role=Role.SALES_MANAGER)
@@ -215,12 +235,22 @@ def test_http_input_authority_and_decimal_boundary(
             payload = {**body, "expected_version": 0, "request_key": "http"}
             for field in [
                 "tenant_id",
+                "customer_id",
                 "settings_revision",
                 "revision",
                 "quote_number",
                 "proposer_id",
             ]:
                 assert client.post(route, json={**payload, field: "forged"}).status_code == 422
+            for field, value in [
+                ("pricing_uom", "EA"),
+                ("availability_required", True),
+                ("substitute_for", str(uuid4())),
+                ("resolution", "missing"),
+            ]:
+                forged = json.loads(json.dumps(payload))
+                forged["lines"][0][field] = value
+                assert client.post(route, json=forged).status_code == 422
             bad = json.loads(json.dumps(payload))
             bad["lines"][0]["quantity"] = 2.0
             invalid = client.post(route, json=bad)
@@ -278,7 +308,11 @@ def test_setup_gate_and_complete_multiple_exception_set(database: Engine) -> Non
             .values(setup_completed_at=None, active_settings_revision=None)
         )
     operations: tuple[Callable[[Session], object], ...] = (
-        lambda session: quotes.create_case(session, actor, RetryInput(request_key="not-ready")),
+        lambda session: quotes.create_case(
+            session,
+            actor,
+            QuoteCreate(request_key="not-ready", customer_id=c.customer.id),
+        ),
         lambda session: quotes.calculate(
             session, c.sessions, actor, case_id, Candidate.model_validate(body)
         ),

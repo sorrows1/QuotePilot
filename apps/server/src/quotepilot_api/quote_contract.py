@@ -17,6 +17,17 @@ class RetryInput(Input):
     request_key: str = Field(min_length=1, max_length=100)
 
 
+class QuoteCreate(RetryInput):
+    customer_id: UUID
+
+    @field_validator("customer_id")
+    @classmethod
+    def non_nil_customer(cls, value: UUID) -> UUID:
+        if value.int == 0:
+            raise ValueError("Valid customer identity required")
+        return value
+
+
 class CustomerCreate(RetryInput):
     name: str = Field(min_length=1, max_length=255)
 
@@ -31,14 +42,10 @@ class QuoteLine(Input):
     product_id: UUID
     quantity: Positive
     quote_uom: Uom
-    pricing_uom: Uom
     negotiated: Proposal | None = None
-    substitute_for: UUID | None = None
-    availability_required: bool = Field(default=False, strict=True)
 
 
 class Candidate(Input):
-    customer_id: UUID
     lines: list[QuoteLine] = Field(min_length=1, max_length=1000)
     freight: Nonnegative = Decimal("0.00")
 
@@ -51,10 +58,10 @@ class Candidate(Input):
 
     @model_validator(mode="after")
     def identities(self) -> Self:
-        if self.customer_id.int == 0 or len({x.line_id for x in self.lines}) != len(self.lines):
-            raise ValueError("Valid customer and unique line identities required")
+        if len({x.line_id for x in self.lines}) != len(self.lines):
+            raise ValueError("Unique line identities required")
         for line in self.lines:
-            if line.product_id.int == 0 or line.substitute_for == line.product_id:
+            if line.product_id.int == 0:
                 raise ValueError("Invalid product identity")
         return self
 

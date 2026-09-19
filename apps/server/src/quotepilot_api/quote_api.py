@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query, Request
 
 from quotepilot_api import quotes
 from quotepilot_api.auth_api import Config, Service, credentials
-from quotepilot_api.quote_contract import Candidate, CustomerCreate, RetryInput, SaveInput
+from quotepilot_api.quote_contract import Candidate, CustomerCreate, QuoteCreate, SaveInput
 
 router = APIRouter(prefix="/api", tags=["quotes"])
 
@@ -20,7 +20,7 @@ def list_quotes(request: Request, service: Service, config: Config) -> list[dict
 
 @router.post("/quotes", status_code=201)
 def create_quote(
-    body: RetryInput, request: Request, service: Service, config: Config
+    body: QuoteCreate, request: Request, service: Service, config: Config
 ) -> dict[str, Any]:
     with service.authenticated(*credentials(request, config)) as (session, principal):
         return quotes.create_case(session, principal, body)

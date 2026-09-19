@@ -1,7 +1,6 @@
 # QT-008 manual quotations
 
-Sales Administrators and Sales Managers with `EDIT_DRAFT` can create internal cases,
-select/create customers, manually select active products, calculate, save, reopen,
+Sales Administrators and Sales Managers with `EDIT_DRAFT` can select/create a customer, create a customer-bound internal case, manually select active products, calculate, save, reopen,
 edit and preview provisional quotes after company setup. System Administrators retain
 their existing setup/import/user workflows and cannot edit quotes.
 
@@ -12,13 +11,18 @@ All browser writes use the existing origin, request-header and CSRF boundary.
 
 ## Persistence and authority
 
-`quote_cases.version` is both the optimistic edit version and latest revision number;
+`quote_cases.customer_id` is required at creation and immutable for the life of the case;
+changing customer means creating a new quote. `quote_cases.version` is both the optimistic edit version and latest revision number;
 there is no separate redundant latest pointer. Each successful save appends a revision
 and structured numeric lines, alongside the exact QT-007 input/result snapshot.
 PostgreSQL triggers reject updates/deletes of revision, line and retry evidence.
 Decimal inputs must be strings; outputs retain decimal strings. Client-supplied
-tenant, proposer, timestamp, revision, settings revision and quote-number authority
-are rejected. Negotiated proposals do not change pricebook data.
+tenant, customer-after-create, proposer, timestamp, revision, settings revision, pricing UOM,
+substitution, availability-required and quote-number authority are rejected. The browser supplies only
+line identity, product, quantity, quote UOM, optional negotiated price/reason and quote-level freight.
+The server derives pricing UOM from current authoritative price records, fixes M1 manual lines as
+resolved/non-substitution, and does not treat the provisional workspace as an availability assertion.
+Negotiated proposals do not change pricebook data.
 
 Save recalculates with `CalculationService` in its established read-only repeatable-read
 commercial snapshot. The surrounding authenticated transaction retains the tenant

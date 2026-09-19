@@ -21,9 +21,12 @@ cases = Table(
     Base.metadata,
     Column("tenant_id", Uuid, ForeignKey("tenants.id"), primary_key=True),
     Column("id", Uuid, primary_key=True),
+    Column("customer_id", Uuid, nullable=False),
     Column("creator_id", Uuid, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("version", Integer, nullable=False),
+    UniqueConstraint("tenant_id", "id", "customer_id"),
+    ForeignKeyConstraint(["tenant_id", "customer_id"], ["customers.tenant_id", "customers.id"]),
     ForeignKeyConstraint(["tenant_id", "creator_id"], ["users.tenant_id", "users.id"]),
 )
 revisions = Table(
@@ -46,8 +49,10 @@ revisions = Table(
     Column("inputs", JSONB, nullable=False),
     Column("exception_set", JSONB, nullable=False),
     UniqueConstraint("tenant_id", "case_id", "revision"),
-    ForeignKeyConstraint(["tenant_id", "case_id"], ["quote_cases.tenant_id", "quote_cases.id"]),
-    ForeignKeyConstraint(["tenant_id", "customer_id"], ["customers.tenant_id", "customers.id"]),
+    ForeignKeyConstraint(
+        ["tenant_id", "case_id", "customer_id"],
+        ["quote_cases.tenant_id", "quote_cases.id", "quote_cases.customer_id"],
+    ),
     ForeignKeyConstraint(["tenant_id", "creator_id"], ["users.tenant_id", "users.id"]),
     ForeignKeyConstraint(
         ["tenant_id", "settings_revision"],

@@ -4,11 +4,14 @@ import { Button, SelectField, StatePanel, StatusBadge, TextField } from './ui'
 
 type Choice = { id: string; name: string; sku?: string }
 type Line = {
-  line_id: string; product_id: string; quantity: string; quote_uom: string; pricing_uom: string
-  availability_required: boolean; substitute_for?: string | null
+  line_id: string; product_id: string; quantity: string; quote_uom: string
   negotiated: { unit_price: string; reason: string } | null
 }
-type Candidate = { customer_id: string; lines: Line[]; freight: string }
+type SavedLine = Line & {
+  pricing_uom: string; availability_required: boolean; substitute_for?: string | null; resolution: string
+}
+type Candidate = { lines: Line[]; freight: string }
+type SavedInputs = { customer_id: string; lines: SavedLine[]; freight: string }
 type Finding = { code: string; kind: string; line_id: string | null }
 export type Result = {
   state: string; subtotal: string | null; freight: string; tax: string | null; total: string | null
@@ -21,11 +24,11 @@ export type Result = {
   }[]
 }
 type Revision = {
-  id: string; revision: number; created_at: string; inputs: Candidate; result: Result; settings_stale: boolean
+  id: string; revision: number; created_at: string; inputs: SavedInputs; result: Result; settings_stale: boolean
   exception_set: { id: string; members: { id: string; code: string; line_id: string | null }[] }
 }
-type Case = { id: string; version: number; created_at: string; revisions: Revision[] }
-const empty: Candidate = { customer_id: '', lines: [], freight: '0.00' }
+type Case = { id: string; customer_id: string; version: number; created_at: string; revisions: Revision[] }
+const empty: Candidate = { lines: [], freight: '0.00' }
 const readable = (text: string) => text.replaceAll('_', ' ').toLowerCase()
 
 function capturedName(evidence: Result['evidence'], kind: string) {
@@ -35,13 +38,12 @@ function capturedName(evidence: Result['evidence'], kind: string) {
   return value && typeof value === 'object' && 'name' in value && typeof value.name === 'string' ? value.name : 'Unavailable'
 }
 
-function editable(inputs: Candidate): Candidate {
+function editable(inputs: SavedInputs): Candidate {
   return {
-    customer_id: inputs.customer_id, freight: inputs.freight,
+    freight: inputs.freight,
     lines: inputs.lines.map((line) => ({
       line_id: line.line_id, product_id: line.product_id, quantity: line.quantity,
-      quote_uom: line.quote_uom, pricing_uom: line.pricing_uom,
-      availability_required: line.availability_required, substitute_for: line.substitute_for,
+      quote_uom: line.quote_uom,
       negotiated: line.negotiated ? { unit_price: line.negotiated.unit_price, reason: line.negotiated.reason } : null,
     })),
   }
@@ -64,6 +66,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
   const [customerSearch, setCustomerSearch] = useState('')
   const [productSearch, setProductSearch] = useState('')
   const [newCustomer, setNewCustomer] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState('')
   const [product, setProduct] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
   const retry = useRef<{ signature: string; key: string } | null>(null)
@@ -95,7 +98,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
 
   function display(next: Case) {
     const latest = next.revisions[0] ?? null
-    setDraft(next); setCandidate(latest ? editable(latest.inputs) : empty)
+    setDraft(next); setSelectedCustomer(next.customer_id); setCandidate(latest ? editable(latest.inputs) : empty)
     setSaved(latest); setResult(latest?.result ?? null); setDirty(false); setConflict(false); setPreview(false)
     requestAnimationFrame(() => heading.current?.focus())
   }
@@ -145,11 +148,26 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
       action={conflict && draft ? <Button variant="secondary" disabled={busy} onClick={() => void run(async () => display(await api<Case>(`/api/quotes/${draft.id}`)))}>Reload latest (replaces local edits)</Button> : undefined} /> : null}
     <fieldset disabled={busy}>
       <legend>Draft cases</legend>
+      <TextField id="customer-search" name="customer-search" label="Find customer" value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
+      <Button variant="secondary" onClick={() => void run(() => search('customers'))}>Find customers</Button>
+      <SelectField id="new-quote-customer" name="new-quote-customer" label="Customer for new draft" value={selectedCustomer}
+        onChange={(e) => setSelectedCustomer(e.target.value)}>
+        <option value="">Select customer</option>
+        {selectedCustomer && !customers.some((c) => c.id === selectedCustomer) ? <option value={selectedCustomer}>Saved customer {selectedCustomer}</option> : null}
+        {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </SelectField>
+      <details><summary>Create customer</summary>
+        <TextField id="new-customer" name="new-customer" label="Customer name" maxLength={255} value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} />
+        <Button variant="secondary" disabled={!newCustomer.trim()} onClick={() => void run(async () => {
+          const created = await mutate<Choice>('/api/customers', { name: newCustomer })
+          setCustomers([...customers, created]); setSelectedCustomer(created.id); setNewCustomer('')
+        })}>Create and select customer</Button>
+      </details>
       <div className="actions">
         <Button variant="secondary" onClick={() => void run(async () => {
-          const created = await mutate<Case>('/api/quotes', {})
+          const created = await mutate<Case>('/api/quotes', { customer_id: selectedCustomer })
           display(created); setCases(await api<Case[]>('/api/quotes'))
-        })} disabled={dirty}>New draft</Button>
+        })} disabled={dirty || !selectedCustomer}>New draft</Button>
         <Button variant="secondary" onClick={() => void run(async () => setCases(await api<Case[]>('/api/quotes')))}>Refresh drafts</Button>
       </div>
       {dirty ? <p>Save your edits before switching drafts.</p> : null}
@@ -165,24 +183,10 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
         <p>{dirty ? 'Unsaved inputs or calculation' : saved ? 'Showing captured saved results' : 'Empty draft'}</p>
       </div>
       {saved?.settings_stale ? <StatePanel kind="info" title="Settings changed — revalidation required" message="This saved revision retains its original evidence. Calculate and save a new revision using current settings." /> : null}
-      <fieldset disabled={busy}>
-        <legend>Customer</legend>
-        <TextField id="customer-search" name="customer-search" label="Find customer" value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-        <Button variant="secondary" onClick={() => void run(() => search('customers'))}>Find customers</Button>
-        <SelectField id="quote-customer" name="quote-customer" label="Selected customer" value={candidate.customer_id}
-          onChange={(e) => edit({ ...candidate, customer_id: e.target.value })}>
-          <option value="">Select customer</option>
-          {candidate.customer_id && !customers.some((c) => c.id === candidate.customer_id) ? <option value={candidate.customer_id}>Saved customer {candidate.customer_id}</option> : null}
-          {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SelectField>
-        <details><summary>Create customer</summary>
-          <TextField id="new-customer" name="new-customer" label="Customer name" maxLength={255} value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} />
-          <Button variant="secondary" disabled={!newCustomer.trim()} onClick={() => void run(async () => {
-            const created = await mutate<Choice>('/api/customers', { name: newCustomer })
-            setCustomers([...customers, created]); edit({ ...candidate, customer_id: created.id }); setNewCustomer('')
-          })}>Create and select customer</Button>
-        </details>
-      </fieldset>
+      <div className="quote-context">
+        <p>Bound customer: {customers.find((c) => c.id === draft.customer_id)?.name ?? draft.customer_id}</p>
+        <p>Customer cannot be changed after draft creation; create a new draft for a different customer.</p>
+      </div>
       <div className="quote-compact" aria-live="polite">Draft total: {result?.total ?? 'Not calculated'} {result?.total ? 'SGD' : ''} · {result ? readable(result.state) : 'Choose inputs and calculate'} · {conflict ? 'Reload latest to reconcile edits' : result ? 'Next: review findings and save draft' : 'Next: complete lines and calculate'}</div>
       <fieldset disabled={busy}>
         <legend>Add products</legend>
@@ -193,7 +197,7 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
         </SelectField>
         {!products.length ? <p>No matching active products. Change the lookup or contact your administrator.</p> : null}
         <Button variant="secondary" disabled={!products.some((p) => p.id === product)} onClick={() => {
-          edit({ ...candidate, lines: [...candidate.lines, { line_id: crypto.randomUUID(), product_id: product, quantity: '1', quote_uom: '', pricing_uom: '', availability_required: false, negotiated: null }] })
+          edit({ ...candidate, lines: [...candidate.lines, { line_id: crypto.randomUUID(), product_id: product, quantity: '1', quote_uom: '', negotiated: null }] })
           setProduct('')
         }}>Add line</Button>
       </fieldset>
@@ -206,9 +210,8 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
             <div className="quote-fields">
               <TextField id={`qty-${index}`} name={`qty-${index}`} label="Quantity" inputMode="decimal" required value={line.quantity} onChange={(e) => changeLine(index, { quantity: e.target.value })} />
               <TextField id={`uom-${index}`} name={`uom-${index}`} label="Quote UOM" required pattern="[A-Z][A-Z0-9_]*" maxLength={30} value={line.quote_uom} onChange={(e) => changeLine(index, { quote_uom: e.target.value })} />
-              <TextField id={`pricing-uom-${index}`} name={`pricing-uom-${index}`} label="Pricing UOM" help="Use the unit on the authoritative price record." required pattern="[A-Z][A-Z0-9_]*" maxLength={30} value={line.pricing_uom} onChange={(e) => changeLine(index, { pricing_uom: e.target.value })} />
             </div>
-            <label><input type="checkbox" checked={line.availability_required} onChange={(e) => changeLine(index, { availability_required: e.target.checked })} /> Require current availability evidence</label>
+            <p>Pricing UOM and commercial authority are resolved by the server from the selected product and current pricebook.</p>
             <label><input type="checkbox" checked={!!line.negotiated} onChange={(e) => changeLine(index, { negotiated: e.target.checked ? { unit_price: '', reason: '' } : null })} /> Propose negotiated unit price</label>
             {line.negotiated ? <div className="quote-fields">
               <TextField id={`proposal-${index}`} name={`proposal-${index}`} label="Proposed unit price" help="Provisional proposal; normal pricebook authority remains unchanged." required inputMode="decimal" value={line.negotiated.unit_price} onChange={(e) => changeLine(index, { negotiated: { ...line.negotiated!, unit_price: e.target.value } })} />
@@ -219,10 +222,10 @@ export function QuoteWorkspace({ csrf }: { csrf: string }) {
           <TextField id="freight" name="freight" label="Freight (SGD)" inputMode="decimal" required value={candidate.freight} onChange={(e) => edit({ ...candidate, freight: e.target.value })} />
           <div className="quote-summary">
             <h3>Draft summary</h3>
-            {result ? <ResultView result={result} inputs={candidate} /> : <p>Choose a customer and at least one line, then calculate current prices and stock context.</p>}
+            {result ? <ResultView result={result} inputs={candidate} /> : <p>Add at least one line, then calculate current prices and stock context.</p>}
             <div className="actions">
-              <Button type="submit" value="calculate" variant={result ? 'secondary' : 'primary'} disabled={!candidate.customer_id || !candidate.lines.length} busy={busy}>Calculate</Button>
-              <Button type="submit" value="save" variant={result ? 'primary' : 'secondary'} disabled={!candidate.customer_id || !candidate.lines.length} busy={busy}>Save new revision</Button>
+              <Button type="submit" value="calculate" variant={result ? 'secondary' : 'primary'} disabled={!candidate.lines.length} busy={busy}>Calculate</Button>
+              <Button type="submit" value="save" variant={result ? 'primary' : 'secondary'} disabled={!candidate.lines.length} busy={busy}>Save new revision</Button>
             </div>
             <p>Saving recalculates on the server. Exceptions remain unresolved; all results are provisional.</p>
           </div>

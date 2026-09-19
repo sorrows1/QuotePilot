@@ -13,7 +13,7 @@ QuotePilot is a quotation-preparation application for wholesale and distribution
 ## Manual quotes
 
 After company setup and commercial imports, sign in as a Sales Administrator or
-Sales Manager to create a draft, select/create a customer, add products with explicit
+Sales Manager to select/create a customer, create a customer-bound draft, add products with explicit
 quantity and UOM, calculate, and save a revision. Reopen a saved draft from the
 workspace list. Each save captures a new immutable commercial revision; stale
 settings and concurrent edits require revalidation or reload. Preview remains

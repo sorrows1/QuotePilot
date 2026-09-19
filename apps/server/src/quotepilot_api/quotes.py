@@ -11,9 +11,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from quotepilot_api import commercial_schema as commercial
 from quotepilot_api import quote_schema as schema
 from quotepilot_api.auth import Capability, Principal, audit, tenant_lock
+from quotepilot_api.commercial import CommercialError, CommercialRepository, eligible
 from quotepilot_api.calculation import CalculationService, canonical
 from quotepilot_api.calculation_models import CalculationLine, CalculationRequest, NegotiatedPrice
-from quotepilot_api.quote_contract import Candidate, CustomerCreate, RetryInput, SaveInput
+from quotepilot_api.quote_contract import Candidate, CustomerCreate, QuoteCreate, RetryInput, SaveInput
 from quotepilot_api.settings import current, setup_complete
 
 
@@ -32,6 +33,65 @@ def authorize(session: Session, principal: Principal) -> None:
 
 def scope(table: Table, principal: Principal) -> Any:
     return table.c.tenant_id == principal.context.tenant_id
+
+
+def require_active(session: Session, principal: Principal, table: Table, identity: UUID) -> None:
+    if (
+        session.scalar(
+            select(table.c.id)
+            .where(scope(table, principal), table.c.id == identity, table.c.archived.is_(False))
+            .with_for_update(read=True)
+        )
+        is None
+    ):
+        raise QuoteError("Selected customer or product is unavailable.", 404)
+
+
+def resolve_pricing_uom(
+    repo: CommercialRepository,
+    principal: Principal,
+    pricebook_id: UUID,
+    line: Any,
+    instant: datetime,
+) -> str:
+    """Resolve pricing authority server-side; browser input never chooses a price UOM."""
+    table = commercial.prices
+    uoms = tuple(
+        repo.session.scalars(
+            select(table.c.uom)
+            .where(
+                scope(table, principal),
+                table.c.product_id == line.product_id,
+                table.c.pricebook_id == pricebook_id,
+                eligible(table, instant),
+            )
+            .distinct()
+        )
+    )
+    if not uoms:
+        return line.quote_uom
+    if len(uoms) == 1:
+        return uoms[0]
+
+    matching: list[str] = []
+    for uom in uoms:
+        try:
+            quantity = line.quantity
+            if line.quote_uom != uom:
+                conversion = repo.conversion(
+                    principal.context, line.product_id, line.quote_uom, uom, instant
+                )
+                quantity *= conversion["factor"]
+            repo.price(
+                principal.context, line.product_id, pricebook_id, uom, quantity, instant
+            )
+            matching.append(uom)
+        except CommercialError as exc:
+            if str(exc) in {"AMBIGUOUS_CONVERSION", "AMBIGUOUS_PRICE"}:
+                raise QuoteError("Pricing authority is ambiguous for this product.", 422) from exc
+    if len(matching) != 1:
+        raise QuoteError("Pricing UOM cannot be resolved unambiguously.", 422)
+    return matching[0]
 
 
 def load_case(session: Session, principal: Principal, case_id: UUID) -> Any:
@@ -94,16 +154,18 @@ def receipt(
     return response
 
 
-def create_case(session: Session, principal: Principal, body: RetryInput) -> dict[str, Any]:
+def create_case(session: Session, principal: Principal, body: QuoteCreate) -> dict[str, Any]:
     authorize(session, principal)
     fingerprint, previous = retry(session, principal, body, "create_case")
     if previous is not None:
         return dict(previous)
+    require_active(session, principal, commercial.customers, body.customer_id)
     case_id, timestamp = uuid4(), datetime.now(UTC)
     session.execute(
         insert(schema.cases).values(
             tenant_id=principal.context.tenant_id,
             id=case_id,
+            customer_id=case["customer_id"],
             creator_id=principal.user_id,
             created_at=timestamp,
             version=0,
@@ -117,12 +179,12 @@ def create_case(session: Session, principal: Principal, body: RetryInput) -> dic
         fingerprint,
         {
             "id": str(case_id),
+            "customer_id": str(body.customer_id),
             "version": 0,
             "created_at": timestamp.isoformat(),
             "revisions": [],
         },
     )
-
 
 def list_cases(session: Session, principal: Principal) -> list[dict[str, Any]]:
     authorize(session, principal)
@@ -133,7 +195,12 @@ def list_cases(session: Session, principal: Principal) -> list[dict[str, Any]]:
         .limit(50)
     ).mappings()
     return [
-        {"id": str(r["id"]), "version": r["version"], "created_at": r["created_at"].isoformat()}
+        {
+            "id": str(r["id"]),
+            "customer_id": str(r["customer_id"]),
+            "version": r["version"],
+            "created_at": r["created_at"].isoformat(),
+        }
         for r in rows
     ]
 
@@ -164,6 +231,7 @@ def read_case(session: Session, principal: Principal, case_id: UUID) -> dict[str
     ).mappings()
     return {
         "id": str(case_id),
+        "customer_id": str(case["customer_id"]),
         "version": case["version"],
         "created_at": case["created_at"].isoformat(),
         "revisions": [revision_output(r, active) for r in rows],
@@ -215,39 +283,46 @@ def evaluate(
     session: Session,
     sessions: sessionmaker[Session],
     principal: Principal,
-    case_id: UUID,
+    case: Any,
     revision: int,
     body: Candidate,
 ) -> tuple[CalculationRequest, Any]:
-    # Reference checks are tenant-local and uniform, including explicit substitution evidence.
-    refs = [(commercial.customers, body.customer_id)]
-    refs.extend((commercial.products, line.product_id) for line in body.lines)
-    refs.extend(
-        (commercial.products, line.substitute_for) for line in body.lines if line.substitute_for
-    )
-    for table, identity in refs:
-        if (
-            session.scalar(
-                select(table.c.id)
-                .where(
-                    scope(table, principal),
-                    table.c.id == identity,
-                    table.c.archived.is_(False),
-                )
-                .with_for_update(read=True)
-            )
-            is None
-        ):
-            raise QuoteError("Selected customer or product is unavailable.", 404)
+    # The case owns customer identity; candidate inputs cannot re-parent a quote.
+    require_active(session, principal, commercial.customers, case["customer_id"])
+    for line in body.lines:
+        require_active(session, principal, commercial.products, line.product_id)
+
     timestamp = datetime.now(UTC)
+    repository = CommercialRepository(session)
+    book: Any | None = None
+    try:
+        _, book = repository.pricebook_selection(
+            principal.context, case["customer_id"], timestamp
+        )
+    except CommercialError:
+        # QT-007 will emit the typed pricebook hard block. A placeholder equal-UOM
+        # input is sufficient because no price can be selected without a book.
+        pass
+
     request = CalculationRequest(
-        case_id=case_id,
+        case_id=case["id"],
         revision=revision,
-        customer_id=body.customer_id,
+        customer_id=case["customer_id"],
         freight=body.freight,
         lines=tuple(
             CalculationLine(
-                **line.model_dump(exclude={"negotiated"}),
+                line_id=line.line_id,
+                product_id=line.product_id,
+                resolution="resolved",
+                quantity=line.quantity,
+                quote_uom=line.quote_uom,
+                pricing_uom=(
+                    line.quote_uom
+                    if book is None
+                    else resolve_pricing_uom(
+                        repository, principal, book["id"], line, timestamp
+                    )
+                ),
                 negotiated=NegotiatedPrice(
                     **line.negotiated.model_dump(),
                     proposer_id=principal.user_id,
@@ -255,15 +330,18 @@ def evaluate(
                 )
                 if line.negotiated
                 else None,
+                substitute_for=None,
+                availability_required=False,
             )
             for line in body.lines
         ),
     )
-    result = CalculationService(sessions).calculate(principal.context, request, actor=principal)
+    result = CalculationService(sessions).calculate(
+        principal.context, request, actor=principal, pricing_as_of=timestamp
+    )
     if result.settings_revision is None:
         raise QuoteError("Company setup pending; contact your administrator.", 403)
     return request, result
-
 
 def calculate(
     session: Session,
@@ -274,7 +352,7 @@ def calculate(
 ) -> dict[str, Any]:
     authorize(session, principal)
     case = load_case(session, principal, case_id)
-    _, result = evaluate(session, sessions, principal, case_id, case["version"] + 1, body)
+    _, result = evaluate(session, sessions, principal, case, case["version"] + 1, body)
     return dict(result.model_dump(mode="json"))
 
 
@@ -294,7 +372,7 @@ def save(
         raise QuoteError(
             "Draft changed elsewhere. Reload the latest revision and reconcile your edits.", 409
         )
-    request, result = evaluate(session, sessions, principal, case_id, case["version"] + 1, body)
+    request, result = evaluate(session, sessions, principal, case, case["version"] + 1, body)
     revision_id, timestamp = uuid4(), datetime.now(UTC)
     exception_set = {
         "id": str(uuid4()),
