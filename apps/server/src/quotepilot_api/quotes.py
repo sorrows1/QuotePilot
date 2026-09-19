@@ -76,7 +76,8 @@ def resolve_pricing_uom(
     """Resolve pricing authority server-side; browser input never chooses a price UOM."""
     table = commercial.prices
     uoms = tuple(
-        repo.session.scalars(
+        str(uom)
+        for uom in repo.session.scalars(
             select(table.c.uom)
             .where(
                 scope(table, principal),
