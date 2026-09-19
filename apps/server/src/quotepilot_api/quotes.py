@@ -19,6 +19,7 @@ from quotepilot_api.quote_contract import (
     Candidate,
     CustomerCreate,
     QuoteCreate,
+    QuoteLine,
     RetryInput,
     SaveInput,
 )
@@ -70,7 +71,7 @@ def resolve_pricing_uom(
     repo: CommercialRepository,
     principal: Principal,
     pricebook_id: UUID,
-    line: Any,
+    line: QuoteLine,
     instant: datetime,
 ) -> str:
     """Resolve pricing authority server-side; browser input never chooses a price UOM."""
