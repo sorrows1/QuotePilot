@@ -269,7 +269,10 @@ def test_http_input_authority_and_decimal_boundary(
             assert distinct_customer.status_code == 201
             assert distinct_customer.json()["id"] != str(c.customer.id)
             assert distinct_customer.json()["name"] == c.customer.name
-            assert client.post("/api/quotes", json={"request_key": "missing-customer"}).status_code == 422
+            missing_customer = client.post(
+                "/api/quotes", json={"request_key": "missing-customer"}
+            )
+            assert missing_customer.status_code == 422
             created = client.post(
                 "/api/quotes",
                 json={"request_key": "http-create", "customer_id": str(c.customer.id)},
