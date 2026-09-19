@@ -20,7 +20,7 @@ from quotepilot_api import quotes
 from quotepilot_api.auth import AuthError, AuthService, Role
 from quotepilot_api.auth_api import auth_service
 from quotepilot_api.auth_models import BusinessAuditEvent
-from quotepilot_api.commercial_schema import prices, products
+from quotepilot_api.commercial_schema import customers, prices, products
 from quotepilot_api.main import app
 from quotepilot_api.quote_contract import Candidate, CustomerCreate, QuoteCreate, SaveInput
 from quotepilot_api.settings_models import QuoteNumber, QuoteNumberCounter
@@ -139,6 +139,12 @@ def test_exact_snapshot_retry_history_settings_and_numbering(database: Engine) -
             .where(schema.cases.c.id == case_id)
             .values(customer_id=UUID(replacement["id"]))
         )
+    with pytest.raises(IntegrityError), c.sessions.begin() as session:
+        session.execute(
+            update(customers)
+            .where(customers.c.id == UUID(replacement["id"]))
+            .values(external_key="QT-CUST-CHANGED")
+        )
     c.commercial.create_batch(c.context, [])
     with c.sessions.begin() as session:
         session.execute(update(products).where(products.c.id == c.p.id).values(archived=True))
@@ -191,6 +197,28 @@ def test_conflicting_retries_and_concurrent_edits(database: Engine) -> None:
 def test_tenant_role_and_reference_boundaries(database: Engine) -> None:
     c, actor, case_id, body = fixture(database)
     other, foreign_actor, foreign_case, foreign_body = fixture(database)
+    with c.sessions.begin() as session:
+        local_shared = quotes.create_customer(
+            session,
+            actor,
+            CustomerCreate(
+                request_key="shared-key",
+                external_key="QT-CUST-SHARED",
+                name="Tenant A shared-key customer",
+            ),
+        )
+    with other.sessions.begin() as session:
+        foreign_shared = quotes.create_customer(
+            session,
+            foreign_actor,
+            CustomerCreate(
+                request_key="shared-key",
+                external_key="QT-CUST-SHARED",
+                name="Tenant B shared-key customer",
+            ),
+        )
+    assert local_shared["id"] != foreign_shared["id"]
+    assert local_shared["external_key"] == foreign_shared["external_key"] == "QT-CUST-SHARED"
     with pytest.raises(AuthError), c.sessions.begin() as session:
         quotes.read_case(session, c.admin, case_id)
     with pytest.raises(quotes.QuoteError, match="unavailable"), c.sessions.begin() as session:
@@ -241,9 +269,13 @@ def test_http_input_authority_and_decimal_boundary(
             },
         ) as client:
             client.cookies.set("quotepilot_dev", token)
-            assert client.post(
-                "/api/customers", json={"request_key": "customer-no-key", "name": "Missing key"}
-            ).status_code == 422
+            assert (
+                client.post(
+                    "/api/customers",
+                    json={"request_key": "customer-no-key", "name": "Missing key"},
+                ).status_code
+                == 422
+            )
             existing_customer = client.post(
                 "/api/customers",
                 json={
@@ -269,9 +301,7 @@ def test_http_input_authority_and_decimal_boundary(
             assert distinct_customer.status_code == 201
             assert distinct_customer.json()["id"] != str(c.customer.id)
             assert distinct_customer.json()["name"] == c.customer.name
-            missing_customer = client.post(
-                "/api/quotes", json={"request_key": "missing-customer"}
-            )
+            missing_customer = client.post("/api/quotes", json={"request_key": "missing-customer"})
             assert missing_customer.status_code == 422
             created = client.post(
                 "/api/quotes",
@@ -299,9 +329,7 @@ def test_http_input_authority_and_decimal_boundary(
                 "request_key": "large-valid-quote",
             }
             assert len(json.dumps(large_save).encode()) > 4096
-            large_revision = client.post(
-                f"/api/quotes/{large_case_id}/revisions", json=large_save
-            )
+            large_revision = client.post(f"/api/quotes/{large_case_id}/revisions", json=large_save)
             assert large_revision.status_code == 201, large_revision.text
 
             route = f"/api/quotes/{case_id}/revisions"

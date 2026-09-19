@@ -61,6 +61,11 @@ class BrowserBoundary:
         ):
             await failure("AUTH_CSRF_REJECTED", 403)(scope, receive, send)
             return
+        large_quote_body = (
+            request.method == "POST"
+            and scope["path"].startswith("/api/quotes/")
+            and scope["path"].rsplit("/", 1)[-1] in {"calculate", "revisions"}
+        )
         body = bytearray()
         while True:
             message = await receive()
@@ -69,7 +74,7 @@ class BrowserBoundary:
             body.extend(message.get("body", b""))
             limit = (
                 QUOTE_BODY_LIMIT
-                if scope["path"].startswith("/api/quotes") and request.method == "POST"
+                if large_quote_body
                 else 2800000
                 if scope["path"] == "/api/admin/imports" and request.method == "POST"
                 else 16384

@@ -11,9 +11,10 @@ Interactive customer creation requires the same non-empty tenant-scoped `externa
 namespace used by QT-006 import. Reusing an active key returns that authoritative
 customer without changing its name; name equality alone never merges customers.
 Draft listing returns the newest 50 cases. All browser writes use the existing origin,
-request-header and CSRF boundary. Quote POST bodies have an explicit 16 MiB transport
-limit so valid multi-line payloads allowed by the 1000-line DTO are not rejected by
-the generic 4 KiB browser boundary.
+request-header and CSRF boundary. Quote calculate/revision POST bodies have an explicit
+16 MiB transport limit so valid multi-line payloads allowed by the 1000-line DTO are
+not rejected by the generic 4 KiB browser boundary; small quote-creation requests keep
+the normal boundary.
 
 ## Persistence and authority
 

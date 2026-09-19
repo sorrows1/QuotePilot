@@ -21,7 +21,13 @@ export async function quoteFlow(admin: Page, sales: Page, info: TestInfo) {
   const errors: string[] = []
   sales.on('pageerror', (error) => errors.push(error.message))
   await sales.reload()
-  await sales.getByLabel('Customer for new draft', { exact: true }).selectOption({ label: 'Synthetic Industrial Supplies' })
+  await sales.getByText('Create customer', { exact: true }).click()
+  await sales.getByLabel('External customer key', { exact: true }).fill('SYN-CUST-100')
+  await sales.getByLabel('Customer name', { exact: true }).fill('Name must not overwrite imported authority')
+  await sales.getByRole('button', { name: 'Create and select customer', exact: true }).click()
+  await expect(
+    sales.getByLabel('Customer for new draft', { exact: true }).locator('option:checked'),
+  ).toHaveText('SYN-CUST-100 · Synthetic Industrial Supplies')
   await sales.getByRole('button', { name: 'New draft', exact: true }).click()
   await expect(sales.getByRole('heading', { name: 'Manual quote workspace' })).toBeFocused()
   await sales.getByLabel('Active product', { exact: true }).selectOption({ label: 'QUOTE-TEST · Quote test valve' })

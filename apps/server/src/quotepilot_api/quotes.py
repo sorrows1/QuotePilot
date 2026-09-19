@@ -101,9 +101,7 @@ def resolve_pricing_uom(
                     principal.context, line.product_id, line.quote_uom, uom, instant
                 )
                 quantity *= conversion["factor"]
-            repo.price(
-                principal.context, line.product_id, pricebook_id, uom, quantity, instant
-            )
+            repo.price(principal.context, line.product_id, pricebook_id, uom, quantity, instant)
             matching.append(uom)
         except CommercialError as exc:
             if str(exc) in {"AMBIGUOUS_CONVERSION", "AMBIGUOUS_PRICE"}:
@@ -205,6 +203,7 @@ def create_case(session: Session, principal: Principal, body: QuoteCreate) -> di
         },
     )
 
+
 def list_cases(session: Session, principal: Principal) -> list[dict[str, Any]]:
     authorize(session, principal)
     rows = session.execute(
@@ -279,11 +278,7 @@ def lookup(session: Session, principal: Principal, kind: str, query: str) -> lis
         {
             "id": str(r["id"]),
             "name": r["name"],
-            **(
-                {"sku": r["sku"]}
-                if kind == "products"
-                else {"external_key": r["external_key"]}
-            ),
+            **({"sku": r["sku"]} if kind == "products" else {"external_key": r["external_key"]}),
         }
         for r in rows
     ]
@@ -362,9 +357,7 @@ def evaluate(
     repository = CommercialRepository(session)
     book: Any | None = None
     with suppress(CommercialError):
-        _, book = repository.pricebook_selection(
-            principal.context, case["customer_id"], timestamp
-        )
+        _, book = repository.pricebook_selection(principal.context, case["customer_id"], timestamp)
     # QT-007 emits the typed pricebook hard block when no book resolves. A placeholder
     # equal-UOM input is sufficient because no price can be selected without a book.
 
@@ -383,9 +376,7 @@ def evaluate(
                 pricing_uom=(
                     line.quote_uom
                     if book is None
-                    else resolve_pricing_uom(
-                        repository, principal, book["id"], line, timestamp
-                    )
+                    else resolve_pricing_uom(repository, principal, book["id"], line, timestamp)
                 ),
                 negotiated=NegotiatedPrice(
                     **line.negotiated.model_dump(),
@@ -406,6 +397,7 @@ def evaluate(
     if result.settings_revision is None:
         raise QuoteError("Company setup pending; contact your administrator.", 403)
     return request, result
+
 
 def calculate(
     session: Session,
