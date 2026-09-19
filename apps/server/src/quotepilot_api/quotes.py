@@ -1,6 +1,7 @@
 """Manual quote application behavior; callers commit one authenticated transaction."""
 
 import hashlib
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -11,10 +12,16 @@ from sqlalchemy.orm import Session, sessionmaker
 from quotepilot_api import commercial_schema as commercial
 from quotepilot_api import quote_schema as schema
 from quotepilot_api.auth import Capability, Principal, audit, tenant_lock
-from quotepilot_api.commercial import CommercialError, CommercialRepository, eligible
 from quotepilot_api.calculation import CalculationService, canonical
 from quotepilot_api.calculation_models import CalculationLine, CalculationRequest, NegotiatedPrice
-from quotepilot_api.quote_contract import Candidate, CustomerCreate, QuoteCreate, RetryInput, SaveInput
+from quotepilot_api.commercial import CommercialError, CommercialRepository, eligible
+from quotepilot_api.quote_contract import (
+    Candidate,
+    CustomerCreate,
+    QuoteCreate,
+    RetryInput,
+    SaveInput,
+)
 from quotepilot_api.settings import current, setup_complete
 
 
@@ -354,14 +361,12 @@ def evaluate(
     timestamp = datetime.now(UTC)
     repository = CommercialRepository(session)
     book: Any | None = None
-    try:
+    with suppress(CommercialError):
         _, book = repository.pricebook_selection(
             principal.context, case["customer_id"], timestamp
         )
-    except CommercialError:
-        # QT-007 will emit the typed pricebook hard block. A placeholder equal-UOM
-        # input is sufficient because no price can be selected without a book.
-        pass
+    # QT-007 emits the typed pricebook hard block when no book resolves. A placeholder
+    # equal-UOM input is sufficient because no price can be selected without a book.
 
     request = CalculationRequest(
         case_id=case["id"],
