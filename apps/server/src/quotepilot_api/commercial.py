@@ -175,6 +175,12 @@ class CommercialRepository:
     def pricebook(
         self, context: TenantContext, customer_id: UUID | None, pricing_as_of: datetime
     ) -> RowMapping:
+        return self.pricebook_selection(context, customer_id, pricing_as_of)[1]
+
+    def pricebook_selection(
+        self, context: TenantContext, customer_id: UUID | None, pricing_as_of: datetime
+    ) -> tuple[RowMapping, RowMapping]:
+        """Return both assignment authority and book for downstream revision evidence."""
         tenant = require_context(context)
         instant = utc(pricing_as_of)
         if customer_id is not None:
@@ -204,7 +210,7 @@ class CommercialRepository:
                     .mappings()
                     .all()
                 )
-                return one(books, "MISSING_PRICEBOOK", "AMBIGUOUS_PRICEBOOK")
+                return assignment, one(books, "MISSING_PRICEBOOK", "AMBIGUOUS_PRICEBOOK")
         raise CommercialError("MISSING_PRICEBOOK")
 
     def price(
