@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from quotepilot_api.auth import AuthError
 from quotepilot_api.auth_api import auth_config
+from quotepilot_api.import_parser import ImportError
 from quotepilot_api.settings import SettingsError, SettingsInput
 
 MESSAGES = {
@@ -66,6 +67,10 @@ class BrowserBoundary:
             body.extend(message.get("body", b""))
             limit = (
                 2800000
+                if scope["path"] == "/api/admin/imports" and request.method == "POST"
+                else 16384
+                if scope["path"].startswith("/api/admin/imports/")
+                else 2800000
                 if scope["path"] == "/api/admin/settings/logo" and request.method == "PUT"
                 else 16384
                 if scope["path"] == "/api/admin/settings"
@@ -94,6 +99,16 @@ class BrowserBoundary:
 
 
 def install_errors(app: FastAPI) -> None:
+    @app.exception_handler(ImportError)
+    async def import_error(request: Request, error: ImportError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "code": "IMPORT_CONFLICT" if error.status == 409 else "IMPORT_INVALID",
+                "message": error.message,
+            },
+            status_code=error.status,
+        )
+
     @app.exception_handler(SettingsError)
     async def settings_error(request: Request, error: SettingsError) -> JSONResponse:
         return JSONResponse(

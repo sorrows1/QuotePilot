@@ -1,0 +1,4 @@
+sku,pricebook_key,pricebook_version,uom,unit_price,quantity_min,quantity_max,valid_from,valid_to
+SYN-SKU-VALVE-DN50-BRASS,SYN-PB-STD-V1,1,EA,12.345600,1,10,2026-01-01T00:00:00Z,
+SYN-SKU-VALVE-DN50-BRASS,SYN-PB-STD-V1,1,EA,12.000000,10,,2026-01-01T00:00:00Z,
+SYN-SKU-TAPE-24MM,SYN-PB-STD-V1,1,EA,1.000000,1,,2026-01-01T00:00:00Z,
