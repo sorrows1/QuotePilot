@@ -27,8 +27,11 @@ Negotiated proposals do not change pricebook data.
 Save recalculates with `CalculationService` in its established read-only repeatable-read
 commercial snapshot. The surrounding authenticated transaction retains the tenant
 security lock and case row lock until the revision, lines, audit and retry receipt
-commit together. Active customer/product rows are checked within the tenant and held
-with share locks during evaluation/save. The saved result captures the calculation
+commit together. Before resolving pricing UOM, the quote transaction takes a shared
+lock on QT-005's per-tenant commercial generation row; QT-005 writes update that row,
+so commercial authority cannot change between trusted UOM resolution and QT-007's
+repeatable-read snapshot. Active customer/product rows are also checked within the
+tenant and held with share locks during evaluation/save. The saved result captures the calculation
 instant; it is not a claim that authority can never change afterward.
 
 Every revision has a fresh exception-set UUID and fresh member UUIDs for every
