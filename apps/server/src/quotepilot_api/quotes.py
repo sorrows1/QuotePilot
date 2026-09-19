@@ -35,6 +35,18 @@ def scope(table: Table, principal: Principal) -> Any:
     return table.c.tenant_id == principal.context.tenant_id
 
 
+def lock_commercial_snapshot(session: Session, principal: Principal) -> None:
+    """Block concurrent commercial writes while the trusted request is built/calculated."""
+    guard = commercial.commercial_write_guards
+    tenant_id = session.scalar(
+        select(guard.c.tenant_id)
+        .where(guard.c.tenant_id == principal.context.tenant_id)
+        .with_for_update(read=True)
+    )
+    if tenant_id is None:
+        raise QuoteError("Commercial authority is unavailable.", 503)
+
+
 def require_active(session: Session, principal: Principal, table: Table, identity: UUID) -> None:
     if (
         session.scalar(
@@ -287,6 +299,10 @@ def evaluate(
     revision: int,
     body: Candidate,
 ) -> tuple[CalculationRequest, Any]:
+    # Lock the commercial generation row before any master-data row locks. QT-005
+    # writers update this row first, so authority cannot change between UOM resolution
+    # here and QT-007's separate repeatable-read snapshot.
+    lock_commercial_snapshot(session, principal)
     # The case owns customer identity; candidate inputs cannot re-parent a quote.
     require_active(session, principal, commercial.customers, case["customer_id"])
     for line in body.lines:
