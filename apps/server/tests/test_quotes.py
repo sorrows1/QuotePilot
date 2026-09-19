@@ -231,6 +231,13 @@ def test_http_input_authority_and_decimal_boundary(
             },
         ) as client:
             client.cookies.set("quotepilot_dev", token)
+            assert client.post("/api/quotes", json={"request_key": "missing-customer"}).status_code == 422
+            created = client.post(
+                "/api/quotes",
+                json={"request_key": "http-create", "customer_id": str(c.customer.id)},
+            )
+            assert created.status_code == 201, created.text
+            assert created.json()["customer_id"] == str(c.customer.id)
             route = f"/api/quotes/{case_id}/revisions"
             payload = {**body, "expected_version": 0, "request_key": "http"}
             for field in [
