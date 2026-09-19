@@ -1,5 +1,6 @@
 import { api, ApiError } from './api'
 import { SettingsPanel } from './SettingsPanel'
+import { QuoteWorkspace } from './QuoteWorkspace'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   AppFrame,
@@ -303,8 +304,7 @@ export function App() {
                   <div className="section-heading">
                     <h2 id="workspace-title">Workspace</h2>
                     <p>
-                      You are signed in. Quotation workflows will be added in later
-                      implementation tasks.
+                      You are signed in to your company workspace.
                     </p>
                   </div>
                   <div className="form-actions">
@@ -345,7 +345,7 @@ export function App() {
                     title="Company setup pending"
                     message="Company setup pending; contact your administrator."
                   />
-                ) : null}
+                ) : <QuoteWorkspace key={me.user_id} csrf={me.csrf_token} />}
 
                 {me.role === 'system_admin' ? (
                   <section className="content-section" aria-labelledby="users-title">

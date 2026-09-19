@@ -5,6 +5,7 @@ from quotepilot_api import (  # noqa: F401
     auth_models,
     commercial_schema,
     import_models,  # noqa: F401
+    quote_schema,
     settings_models,
 )
 from quotepilot_api.tenants import Base

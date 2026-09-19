@@ -58,20 +58,34 @@ def test_browser_authentication(database: Engine) -> None:
                 env=env,
             )
         )
+        command = [
+            "node",
+            str(root / "apps/web/node_modules/@playwright/test/cli.js"),
+            "test",
+            "--config",
+            str(root / "apps/web/playwright.config.ts"),
+        ]
         result = subprocess.run(
-            [
-                "node",
-                str(root / "apps/web/node_modules/@playwright/test/cli.js"),
-                "test",
-                "--config",
-                str(root / "apps/web/playwright.config.ts"),
-            ],
+            [*command, "--grep-invert", "restart:"],
             cwd=root,
             env=env,
             timeout=180,
             check=False,
         )
         assert result.returncode == 0
+        # A new API process must reopen the same durable revision after setup/import/save.
+        api_process = processes.pop(0)
+        api_process.terminate()
+        api_process.wait(timeout=10)
+        processes.append(subprocess.Popen(api_process.args, env=env))
+        restarted = subprocess.run(
+            [*command, "--grep", "restart:"],
+            cwd=root,
+            env=env,
+            timeout=120,
+            check=False,
+        )
+        assert restarted.returncode == 0
     finally:
         for process in processes:
             process.terminate()

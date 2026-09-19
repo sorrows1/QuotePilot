@@ -87,6 +87,10 @@ def test_upgrade_downgrade_reupgrade(empty_database: Engine) -> None:
         "quote_numbers",
         "quote_number_counters",
         "import_jobs",
+        "quote_cases",
+        "quote_revisions",
+        "quote_lines",
+        "quote_requests",
         *TABLES,
     }
     for _ in range(2):

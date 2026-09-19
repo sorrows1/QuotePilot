@@ -99,6 +99,18 @@ class BrowserBoundary:
 
 
 def install_errors(app: FastAPI) -> None:
+    from quotepilot_api.quotes import QuoteError
+
+    @app.exception_handler(QuoteError)
+    async def quote_error(request: Request, error: QuoteError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "code": "QUOTE_CONFLICT" if error.status == 409 else "QUOTE_INVALID",
+                "message": error.message,
+            },
+            status_code=error.status,
+        )
+
     @app.exception_handler(ImportError)
     async def import_error(request: Request, error: ImportError) -> JSONResponse:
         return JSONResponse(
@@ -128,6 +140,23 @@ def install_errors(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError) -> JSONResponse:
+        if request.url.path.startswith("/api/quotes"):
+            return JSONResponse(
+                {
+                    "code": "QUOTE_INVALID",
+                    "message": "Check quote fields: quantities must be positive; "
+                    "UOMs use uppercase "
+                    "letters; prices use at most six decimal places and freight at most two. "
+                    "Negotiated prices require a reason. "
+                    "Select a customer and at least one product.",
+                },
+                status_code=422,
+            )
+        if request.url.path == "/api/customers":
+            return JSONResponse(
+                {"code": "QUOTE_INVALID", "message": "Enter a customer name of 1–255 characters."},
+                status_code=422,
+            )
         if request.url.path.startswith("/api/admin/settings"):
             allowed = {
                 *SettingsInput.model_fields,

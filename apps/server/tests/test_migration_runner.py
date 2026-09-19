@@ -50,7 +50,7 @@ def test_concurrent_runners_wait_for_lock_and_reach_head(empty_database: Engine)
             assert child.returncode == 0, stderr
         with empty_database.connect() as connection:
             version = connection.scalar(text("SELECT version_num FROM alembic_version"))
-            assert version == "0006_archive_authority"
+            assert version == "0007_quotes"
     finally:
         for child in children:
             if child.poll() is None:

@@ -10,6 +10,17 @@ QuotePilot is a quotation-preparation application for wholesale and distribution
 - `AGENTS.md` — vendor-neutral repository engineering policy.
 - `docker-compose.yml` — reproducible PostgreSQL and containerized integration environment.
 
+## Manual quotes
+
+After company setup and commercial imports, sign in as a Sales Administrator or
+Sales Manager to create a draft, select/create a customer, add products with explicit
+quantity and UOM, calculate, and save a revision. Reopen a saved draft from the
+workspace list. Each save captures a new immutable commercial revision; stale
+settings and concurrent edits require revalidation or reload. Preview remains
+provisional and does not allocate a customer-facing quote number.
+
+See [the quote persistence and verification contract](apps/server/QUOTES.md).
+
 ## Prerequisites
 
 Install:

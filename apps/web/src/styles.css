@@ -575,3 +575,17 @@ legend {
     width: 100%;
   }
 }
+.quote-workspace { display: grid; gap: 1.25rem; min-width: 0; }
+.quote-context, .quote-line, .quote-summary, .quote-preview { border: 1px solid var(--border-default); padding: 1rem; border-radius: .6rem; min-width: 0; }
+.quote-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.quote-line { margin-block: 1rem; }
+.quote-line > label { display: block; margin-block: .8rem; }
+.quote-totals { display: grid; grid-template-columns: 1fr auto; gap: .5rem 1rem; }
+.quote-totals dd { margin: 0; font-variant-numeric: tabular-nums; }
+.quote-workspace pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8rem; }
+.quote-workspace p, .quote-workspace li { overflow-wrap: anywhere; }
+.quote-workspace details { margin-block: .75rem; }
+.quote-workspace summary { cursor: pointer; }
+.quote-compact { padding: .75rem; background: var(--surface-muted); border-radius: .5rem; }
+.quote-preview { border: 2px dashed var(--status-warning); }
+@media (max-width: 760px) { .quote-fields { grid-template-columns: 1fr; } }

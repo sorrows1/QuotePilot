@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from quotepilot_api.auth_api import router
 from quotepilot_api.auth_http import BrowserBoundary, install_errors
 from quotepilot_api.import_api import router as import_router
+from quotepilot_api.quote_api import router as quote_router
 from quotepilot_api.settings_api import router as settings_router
 
 
@@ -19,6 +20,7 @@ app.add_middleware(BrowserBoundary)
 app.include_router(router)
 app.include_router(settings_router)
 app.include_router(import_router)
+app.include_router(quote_router)
 install_errors(app)
 
 
