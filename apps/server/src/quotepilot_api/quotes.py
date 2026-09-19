@@ -165,7 +165,7 @@ def create_case(session: Session, principal: Principal, body: QuoteCreate) -> di
         insert(schema.cases).values(
             tenant_id=principal.context.tenant_id,
             id=case_id,
-            customer_id=case["customer_id"],
+            customer_id=body.customer_id,
             creator_id=principal.user_id,
             created_at=timestamp,
             version=0,
@@ -387,7 +387,7 @@ def save(
         id=revision_id,
         case_id=case_id,
         revision=request.revision,
-        customer_id=body.customer_id,
+        customer_id=case["customer_id"],
         creator_id=principal.user_id,
         created_at=timestamp,
         settings_revision=result.settings_revision,
