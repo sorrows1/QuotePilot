@@ -118,11 +118,7 @@ def quote_validation_fields(error: RequestValidationError) -> dict[str, str]:
         if location == ("freight",):
             key = "freight"
             message = "Enter a nonnegative amount with at most two decimal places."
-        elif (
-            len(location) >= 3
-            and location[0] == "lines"
-            and isinstance(location[1], int)
-        ):
+        elif len(location) >= 3 and location[0] == "lines" and isinstance(location[1], int):
             index = location[1]
             suffix = location[2:]
             if suffix == ("quantity",):
